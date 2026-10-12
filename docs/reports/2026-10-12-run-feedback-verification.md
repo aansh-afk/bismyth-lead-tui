@@ -32,6 +32,8 @@ Final review also found and corrected an empty-queue instruction that advertised
 
 Installed the final tarball into an isolated temporary npm prefix with install scripts disabled. The package reported version 0.1.4, its compiled modules contained the spinner and corrected queue shortcut, `--help` passed, and `doctor` found Chrome plus the saved ChatGPT login using empty test storage.
 
+Published the source change as commit `f7feccc` and the tarball in [release v0.1.4](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.4). The GitHub asset digest matched the local SHA-256. The public tagged installer downloaded and installed version 0.1.4 in a separate clean prefix, and its installed `--help` command passed.
+
 ## Limits
 
 The animation proves that the terminal is refreshing during an active operation; it does not prove that a remote portal is making progress or that an enquiry succeeded. The elapsed display measures time since the current phase started, including pauses and browser waits, and freezes while the status is static. The user's exact installed terminal session was not available to reproduce its Enter symptom; the source app's real Review queue Enter path is verified by the PTY fixture. Live portal behavior was not retested for this UI change.
