@@ -38,7 +38,7 @@ export async function subscriptionJSON(prompt: string, schema: object, signal?: 
     const imagePath = join(directory, 'challenge.png');
     if (image) await writeFile(imagePath, image, {mode: 0o600});
     await new Promise<void>((resolve, reject) => {
-      const child = spawn('codex', ['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '-c', 'forced_login_method="chatgpt"', '-c', 'approval_policy="never"', '--color', 'never', '--output-schema', schemaPath, '--output-last-message', outputPath, ...(image ? ['--image', imagePath] : []), '-'], {cwd: directory, env: subscriptionEnvironment(), stdio: ['pipe', 'ignore', 'pipe'], signal});
+      const child = spawn('codex', ['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '-c', 'forced_login_method="chatgpt"', '-c', 'approval_policy="never"', '--color', 'never', '--output-schema', schemaPath, '--output-last-message', outputPath, ...(image ? ['--model', 'gpt-6-luna', '-c', 'model_reasoning_effort="low"', '--image', imagePath] : []), '-'], {cwd: directory, env: subscriptionEnvironment(), stdio: ['pipe', 'ignore', 'pipe'], signal});
       // CLI diagnostics can contain account details. Never forward them into the TUI.
       child.stderr.resume(); child.stdin.on('error', () => undefined); child.stdin.end(prompt);
       const timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Subscription decision timed out. Try again or complete this step in Chrome.')); }, 90000);

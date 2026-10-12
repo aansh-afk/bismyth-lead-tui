@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.5/bismyth-lead-tui-0.1.5.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.6/bismyth-lead-tui-0.1.6.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.5/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.6/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -103,6 +103,8 @@ Each model invocation uses `codex exec`, saved CLI auth, structured JSON output,
 
 Contact-control requests contain control labels and the task, without the contact values. CAPTCHA requests attach only the challenge panel screenshot plus the grid dimensions and already-selected tile IDs. Temporary screenshots have private permissions and are removed when the request finishes. Contact entry-point choices are bounded to the IDs observed on the page. Final enquiry submit controls are excluded from model selection. Actual decisions consume your Codex account's usage allowance; access is subject to that account's limits.
 
+Image CAPTCHA decisions explicitly select **GPT-6 Luna with low reasoning** (`--model gpt-6-luna -c 'model_reasoning_effort="low"'`). Contact-control decisions keep the CLI's default model. Your account must have access to Luna; a model-access error retains the browser handoff. [GPT-6 Luna supports image input and low reasoning, but no audio input](https://developers.openai.com/api/docs/models/gpt-6-luna), so offered audio challenges continue through the separate Google speech-recognition helper.
+
 Verified on this machine: Codex CLI 0.160.1 reports ChatGPT login, and `check-subscription` completed a real contact-control decision. This establishes the configured subscription authentication route; it does not establish unlimited quota or your exact plan tier.
 
 Sources: [official authentication guidance](https://learn.chatgpt.com/docs/auth), [official non-interactive execution](https://learn.chatgpt.com/docs/non-interactive-mode).
@@ -123,7 +125,7 @@ The meeting target is 100–300 projects per run. Discovery can return fewer pro
 
 ## Automatic CAPTCHA attempts
 
-During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using your saved ChatGPT subscription. When an audio challenge is already visible or the provider offers an audio button, it can transcribe that challenge using Google speech recognition. Each automatic cycle has a two-minute budget, at most four image decisions and two audio answers. Enter permits a second cycle on the same page for late-loading or transient challenges; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
+During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. When an audio challenge is already visible or the provider offers an audio button, it can transcribe that challenge using Google speech recognition. Each automatic cycle has a two-minute budget, at most four image decisions and two audio answers. Enter permits a second cycle on the same page for late-loading or transient challenges; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
 
 A checkbox tick or a transcription never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Changed images/audio, invalid decisions and exhausted attempts produce a visible reason. Provider “Try again later” blocks are detected before solver calls: discovery preserves found properties and continues to other selected websites. The app does not repeatedly request an audio challenge when the provider has blocked it. OTPs and consent remain manual. Live 99acres provider-block clearance is not established.
 
