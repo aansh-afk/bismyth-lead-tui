@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.6/bismyth-lead-tui-0.1.6.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.7/bismyth-lead-tui-0.1.7.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.6/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.7/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -126,6 +126,8 @@ The meeting target is 100–300 projects per run. Discovery can return fewer pro
 ## Automatic CAPTCHA attempts
 
 During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. When an audio challenge is already visible or the provider offers an audio button, it can transcribe that challenge using Google speech recognition. Each automatic cycle has a two-minute budget, at most four image decisions and two audio answers. Enter permits a second cycle on the same page for late-loading or transient challenges; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
+
+Image grids take priority over an offered audio button. The app waits up to eight seconds for all 9/16 tiles and their images to load before falling back to offered audio; an already open audio answer field is handled immediately. An image-solver failure can also use audio fallback. Activity explicitly reports **GPT-6 Luna · low reasoning**, tile selection, image Verify and any switch to audio. Quit and relaunch after upgrading so an already running process loads the new solver.
 
 A checkbox tick or a transcription never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Changed images/audio, invalid decisions and exhausted attempts produce a visible reason. Provider “Try again later” blocks are detected before solver calls: discovery preserves found properties and continues to other selected websites. The app does not repeatedly request an audio challenge when the provider has blocked it. OTPs and consent remain manual. Live 99acres provider-block clearance is not established.
 

@@ -14,7 +14,10 @@ export class Runner extends EventEmitter {
   handoffMessage = '';
   active = false;
   private resumeState: Run['state'] = 'running';
-  constructor(readonly run: Run, private readonly store: Store, private readonly driver: Driver) { super(); }
+  constructor(readonly run: Run, private readonly store: Store, private readonly driver: Driver) {
+    super();
+    driver.setActivity?.(message => this.record(message));
+  }
   private async record(message: string): Promise<void> {
     this.run.events.push({at: new Date().toISOString(), message});
     this.run.events = this.run.events.slice(-200);

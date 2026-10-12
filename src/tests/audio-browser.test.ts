@@ -12,6 +12,7 @@ import {Runner} from '../runner.js';
 import {Store} from '../store.js';
 
 const audioUrl = 'https://www.google.com/recaptcha/api2/payload?p=fixture-audio-A&k=fixture-key';
+const tilePng = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64');
 
 test('real Chromium audio fallback verifies fresh responses and detects provider blocks', {timeout: 160000}, async context => {
   const directory = await mkdtemp(join(tmpdir(), 'bismyth-audio-browser-'));
@@ -19,9 +20,27 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
     response.setHeader('Content-Type', 'text/html');
     const path = new URL(request.url || '/', 'http://fixture.test').pathname;
     const mode = path.split('/').at(-1);
+    if (path === '/slow-image.png') {
+      response.setHeader('Content-Type', 'image/png');
+      setTimeout(() => response.end(tilePng), 1200);
+      return;
+    }
     if (path.startsWith('/widget/')) {
       if (mode === 'empty') return void response.end('<h1>Widget loading</h1>');
       if (mode === 'blocked') return void response.end('<div class="rc-doscaptcha-body"><h2>Try again later</h2><div class="rc-doscaptcha-body-text">Your computer or network may be sending automated queries. To protect our users, we cannot process your request right now.</div></div>');
+      if (mode === 'delayed-panel' || mode === 'delayed-tiles' || mode === 'delayed-images') return void response.end(`<html><body>
+        <div id="recaptcha-anchor" role="checkbox" aria-checked="true">I'm not a robot</div>
+        <div class="rc-imageselect" ${mode === 'delayed-panel' ? 'hidden' : ''}><h2>Select all red squares</h2><div id="grid" style="display:grid;grid-template-columns:repeat(3,80px)"></div></div>
+        <button id="recaptcha-audio-button" onclick="parent.postMessage('audio-click','*');document.querySelector('.rc-imageselect').hidden=true;document.querySelector('.rc-doscaptcha-body-text').hidden=false">Get an audio challenge</button>
+        <div class="rc-doscaptcha-body-text" hidden>Your computer or network may be sending automated queries. Try again later.</div>
+        <button id="recaptcha-verify-button" onclick="if(document.querySelectorAll('[aria-pressed=true]').length===1 && document.querySelector('.rc-imageselect-tile').getAttribute('aria-pressed')==='true'){parent.postMessage('accepted','*');document.querySelector('.rc-imageselect').hidden=true}">Verify</button>
+        <script>
+          const tileImage=${JSON.stringify(mode === 'delayed-images' ? '<img src="/slow-image.png" width="20" height="20">' : '')};
+          const tiles=Array.from({length:9},(_,index)=>'<button class="rc-imageselect-tile" aria-pressed="false" onclick="this.setAttribute(\\'aria-pressed\\',\\'true\\')" style="width:80px;height:80px;background:red">'+(index+1)+tileImage+'</button>').join('');
+          ${mode !== 'delayed-tiles' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}
+          setTimeout(()=>{document.querySelector('.rc-imageselect').hidden=false;${mode === 'delayed-tiles' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}},600);
+        </script>
+      </body></html>`);
       const existing = mode === 'existing';
       response.end(`<html><body>
         <div id="recaptcha-anchor" role="checkbox" aria-checked="true">I'm not a robot</div>
@@ -41,7 +60,7 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
       response.end(`<html><body><h1>Complete the CAPTCHA</h1>
         <iframe title="reCAPTCHA" src="http://localhost:${address.port}/widget/${mode}" style="width:420px;height:500px"></iframe>
         <textarea name="g-recaptcha-response" hidden></textarea><button disabled onclick="location.href='/done'">Proceed</button>
-        <script>addEventListener('message',event=>{if(event.data==='accepted'){document.querySelector('textarea').value='fixture-provider-token';${mode === 'disabled' ? '' : "document.querySelector('button').disabled=false"}}})</script>
+        <script>sessionStorage.setItem('audioClicks','0');addEventListener('message',event=>{if(event.data==='audio-click')sessionStorage.setItem('audioClicks',String(Number(sessionStorage.getItem('audioClicks'))+1));if(event.data==='accepted'){document.querySelector('textarea').value='fixture-provider-token';${mode === 'disabled' ? '' : "document.querySelector('button').disabled=false"}}})</script>
       </body></html>`);
     }
   });
@@ -55,6 +74,33 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
     // No Google audio, speech service, model or live portal is used by these fixtures.
     await page.route('https://www.google.com/**', route => route.fulfill({status: 200, contentType: 'audio/mpeg', body: Buffer.from([0])}));
     const widget = () => page.frames().find(frame => frame.url().includes('/widget/'))!;
+    for (const mode of ['delayed-panel', 'delayed-tiles', 'delayed-images']) {
+      await context.test(mode === 'delayed-panel'
+        ? 'a visible audio offer waits for the delayed image panel before image inference'
+        : mode === 'delayed-tiles'
+          ? 'a visible image panel waits for its grid tiles instead of switching to audio'
+          : 'visible grid tiles wait for their images to load before image inference', async () => {
+        await page.goto(base + '/captcha/' + mode, {waitUntil: mode === 'delayed-images' ? 'domcontentloaded' : 'load'});
+        if (mode === 'delayed-images') {
+          await page.frameLocator('iframe').locator('.rc-imageselect-tile').first().waitFor({state: 'visible'});
+          assert.equal(await widget().locator('.rc-imageselect-tile img').evaluateAll(elements => elements.every(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)), false);
+        }
+        let gridCalls = 0; let audioCalls = 0;
+        const result = await attemptCaptcha(page, new AbortController().signal, async (image, count, signal, selected) => {
+          gridCalls++; assert.ok(image.byteLength > 0); assert.equal(count, 9); assert.equal(signal.aborted, false);
+          if (mode === 'delayed-images') {
+            const images = widget().locator('.rc-imageselect-tile img');
+            assert.equal(await images.count(), 9);
+            assert.equal(await images.evaluateAll(elements => elements.every(element => (element as HTMLImageElement).complete && (element as HTMLImageElement).naturalWidth > 0)), true);
+          }
+          assert.deepEqual(selected, gridCalls === 1 ? [] : [1]);
+          return gridCalls === 1 ? {action: 'select', tiles: [1]} : {action: 'verify', tiles: []};
+        }, async () => { audioCalls++; return 'seven eleven'; });
+        assert.equal(result.pending, false, result.reason); assert.equal(gridCalls, 2); assert.equal(audioCalls, 0);
+        assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('audioClicks'))), 0);
+        assert.equal(new URL(page.url()).pathname, '/done'); assert.equal(await captchaPending(page), false);
+      });
+    }
     await context.test('an offered audio challenge is transcribed and checked by both provider and portal', async () => {
       await page.goto(base + '/captcha/switch'); let gridCalls = 0; let audioCalls = 0;
       const result = await attemptCaptcha(page, new AbortController().signal, async () => {

@@ -124,6 +124,23 @@ test('real Chromium CAPTCHA flow validates provider acceptance, stale images, fa
       const result = await attemptCaptcha(page, new AbortController().signal, async () => { throw new Error('Subscription unavailable'); });
       assert.equal(result.pending, true); assert.match(result.reason, /Subscription unavailable/);
     });
+    await context.test('stopping while verification activity is saved prevents the Verify click', async () => {
+      await page.goto(base + '/captcha'); const controller = new AbortController();
+      const verify = page.frames()[1].locator('#recaptcha-verify-button');
+      await verify.evaluate(element => element.addEventListener('click', () => element.setAttribute('data-clicked', 'yes')));
+      await assert.rejects(attemptCaptcha(page, controller.signal, async () => ({action: 'verify', tiles: []}), undefined, async message => {
+        if (message.includes('verifying the image selection')) controller.abort();
+      }));
+      assert.equal(await verify.getAttribute('data-clicked'), null);
+    });
+    await context.test('instructions changed during activity persistence prevent stale image clicks', async () => {
+      await page.goto(base + '/captcha');
+      const result = await attemptCaptcha(page, new AbortController().signal, async () => ({action: 'select', tiles: [1, 3]}), undefined, async message => {
+        if (message.includes('selecting image tiles')) await page.frames()[1].locator('#instruction').evaluate(element => { element.textContent = 'Select blue squares instead'; });
+      });
+      assert.equal(result.pending, true); assert.match(result.reason, /changed/);
+      assert.equal(await page.frames()[1].locator('.rc-imageselect-tileselected').count(), 0);
+    });
     await context.test('contact preparation automatically solves the widget and fills supplied fields', async () => {
       const integration = new PortalBrowser(join(directory, 'integration'), true, async () => undefined, async (_image, _count, _signal, selected) => selected?.length ? {action: 'verify', tiles: []} : {action: 'select', tiles: [1, 3]});
       try {
@@ -152,8 +169,12 @@ test('real Chromium CAPTCHA flow validates provider acceptance, stale images, fa
     });
     if (process.env.BISMYTH_TEST_SUBSCRIPTION_VISION === '1') await context.test('real ChatGPT subscription interprets a cropped synthetic challenge', {timeout: 95000}, async () => {
       await page.goto(base + '/captcha');
-      const result = await attemptCaptcha(page, new AbortController().signal, solveGridWithSubscription);
+      const activity: string[] = [];
+      const result = await attemptCaptcha(page, new AbortController().signal, solveGridWithSubscription, undefined, async message => { activity.push(message); });
       assert.equal(result.pending, false, result.reason); assert.equal(new URL(page.url()).pathname, '/done');
+      assert.ok(activity.some(message => /GPT-6 Luna · low reasoning.*9 tiles/.test(message)));
+      assert.ok(activity.some(message => /verifying the image selection/.test(message)));
+      assert.ok(!activity.some(message => /switching.*audio/.test(message)));
     });
   } finally {
     await driver.close(); server.close(); await once(server, 'close'); await rm(directory, {recursive: true, force: true});

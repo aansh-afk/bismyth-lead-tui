@@ -27,6 +27,22 @@ async function temporary(): Promise<{store: Store; close: () => Promise<void>}> 
 function fake(overrides: Partial<Driver> = {}): Driver {
   return {discover: async () => [item()], prepare: async () => ({ready: true, reason: '', baseline: []}), submit: async () => true, confirmed: async () => true, close: async () => {}, ...overrides};
 }
+test('browser solver activity is visible during a run and persisted in saved history', async () => {
+  const {store, close} = await temporary();
+  try {
+    let activity: ((message: string) => Promise<void>) | undefined;
+    const message = 'CAPTCHA: GPT-6 Luna · low reasoning analysing 9 tiles (1/4).';
+    const driver = fake({setActivity: listener => { activity = listener; }, discover: async () => { await activity!(message); return [item()]; }});
+    const run = createRun({...config, sites: ['99acres']});
+    const runner = new Runner(run, store, driver); let visible = false;
+    runner.on('change', () => { if (run.events.some(event => event.message === message)) visible = true; });
+    await runner.discover();
+    assert.equal(visible, true);
+    assert.ok((await store.load(run.id)).events.some(event => event.message === message));
+    const rendered = renderView({width: 110, height: 30, screen: 2, advanced: false, selected: [0, 0, 0, 0], config: run.config, run, history: [], fields: [], help: false, auth: 'ChatGPT subscription connected', notice: '', handoff: '', active: true, stopping: false, animationFrame: 0, elapsedMs: 0});
+    assert.ok(rendered.includes('GPT-6 Luna'));
+  } finally { await close(); }
+});
 test('configuration validates meeting inputs and bounded batches', () => {
   assert.deepEqual(validateConfig(config), []);
   assert.ok(validateConfig({...config, limit: 301}).length);

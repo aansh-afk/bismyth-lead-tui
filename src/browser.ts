@@ -10,7 +10,7 @@ import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
 import {attemptCaptcha, blockedCaptcha, captchaBlocked, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
 import {solveAudioWithGoogle} from './audio-captcha.js';
 import type {AudioSolver} from './audio-captcha.js';
-import type {CaptchaResult, GridSolver} from './captcha.js';
+import type {CaptchaActivity, CaptchaResult, GridSolver} from './captcha.js';
 import {discoverPublicListings} from './listing-api.js';
 import type {PublicListingContext} from './listing-api.js';
 
@@ -79,6 +79,7 @@ export interface Driver {
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
   verifyCaptcha?(): Promise<CaptchaResult>;
   takeDiscoveryNotes?(): string[];
+  setActivity?(activity: CaptchaActivity): void;
   close(): Promise<void>;
 }
 export async function browserPath(preferred = ''): Promise<string> {
@@ -94,8 +95,10 @@ export class PortalBrowser implements Driver {
   private decisionController = new AbortController();
   private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
+  private activity: CaptchaActivity = async () => undefined;
   constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio: AudioSolver = (url, signal) => solveAudioWithGoogle(url, signal, this.dataDirectory)) {}
   takeDiscoveryNotes(): string[] { return this.discoveryNotes.splice(0); }
+  setActivity(activity: CaptchaActivity): void { this.activity = activity; }
   async start(config: Config): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
     this.definitions = await loadAdapters(config.adapterFile);
@@ -118,10 +121,10 @@ export class PortalBrowser implements Driver {
   async verifyCaptcha(): Promise<CaptchaResult> {
     const page = this.page!;
     if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
-    if (await captchaBlocked(page)) return blockedCaptcha;
+    if (await captchaBlocked(page)) { await this.activity('CAPTCHA: ' + blockedCaptcha.reason); return blockedCaptcha; }
     const attempts = this.captchaFailure?.url === page.url() ? this.captchaFailure.attempts : 0;
     if (attempts >= 2 && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
-    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio);
+    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio, this.activity);
     this.captchaFailure = result.pending ? {url: page.url(), result, attempts: attempts + 1} : undefined;
     return result;
   }
