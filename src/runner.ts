@@ -116,6 +116,10 @@ export class Runner extends EventEmitter {
             // Checkpoint working before any click; interruption recovers as uncertain.
             submitted = true;
             const clicked = await this.driver.submit(item);
+            if (clicked && this.driver.verifyCaptcha) {
+              const verification = await this.driver.verifyCaptcha();
+              if (verification.pending) await this.handoff(verification.reason + ' Complete verification in Chrome; c checks confirmation, k leaves this uncertain.');
+            }
             if (!clicked) {
               await this.handoff('Submit control not found. Submit in Chrome, then c checks confirmation; k leaves this uncertain.');
             }
@@ -126,7 +130,9 @@ export class Runner extends EventEmitter {
               confirmed = await this.driver.confirmed(item, baseline);
             }
             if (!confirmed && clicked) {
-              await this.handoff('Complete any OTP or remaining steps in Chrome. c checks confirmation; k leaves this uncertain.');
+              const verification = await this.driver.verifyCaptcha?.();
+              confirmed = await this.driver.confirmed(item, baseline);
+              if (!confirmed) await this.handoff((verification?.pending ? verification.reason + ' ' : '') + 'Complete any OTP or remaining steps in Chrome. c checks confirmation; k leaves this uncertain.');
               confirmed = await this.driver.confirmed(item, baseline);
             }
             await this.mark(item, confirmed ? 'submitted' : 'uncertain', confirmed ? 'New portal confirmation observed.' : 'No new confirmation observed; inspect before retrying.');

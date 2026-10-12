@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.1/bismyth-lead-tui-0.1.1.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.2/bismyth-lead-tui-0.1.2.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.1/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.2/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -31,7 +31,7 @@ bismyth-leads doctor
 
 Each machine uses its own Codex login. The installer does not copy credentials, install a browser or change your shell.
 
-`bismyth-leads doctor-fix` creates local app storage and, when missing, installs Codex and Chromium on supported Linux package-manager hosts. It asks for `sudo` only for Chromium installation. ChatGPT login, CAPTCHA and OTP verification remain interactive steps; the command prints the exact next action when one is needed.
+`bismyth-leads doctor-fix` creates local app storage and, when missing, installs Codex and Chromium on supported Linux package-manager hosts. It asks for `sudo` only for Chromium installation. ChatGPT login and OTP verification remain interactive steps; the command prints the exact next action when one is needed.
 
 ```bash
 bismyth-leads --help
@@ -93,7 +93,7 @@ The TUI shows the connection state at the top. Codex chooses among observed cont
 
 Each model invocation uses `codex exec`, saved CLI auth, structured JSON output, `forced_login_method="chatgpt"`, ignored user provider configuration, a read-only sandbox and a private temporary working directory. The child environment excludes `OPENAI_API_KEY`, `CODEX_API_KEY` and API gateway overrides. Authentication failure, subscription limits or model errors produce a visible failure; there is no API-key or Laya fallback. The app never reads or copies your auth tokens.
 
-The decision request contains control labels and the task, without the contact values. Contact entry-point choices are bounded to the IDs observed on the page. Final submit controls are excluded from model selection. Actual decisions consume your Codex account's usage allowance; access is subject to that account's limits.
+Contact-control requests contain control labels and the task, without the contact values. CAPTCHA requests attach only the challenge panel screenshot plus the grid dimensions and already-selected tile IDs. Temporary screenshots have private permissions and are removed when the request finishes. Contact entry-point choices are bounded to the IDs observed on the page. Final enquiry submit controls are excluded from model selection. Actual decisions consume your Codex account's usage allowance; access is subject to that account's limits.
 
 Verified on this machine: Codex CLI 0.160.1 reports ChatGPT login, and `check-subscription` completed a real contact-control decision. This establishes the configured subscription authentication route; it does not establish unlimited quota or your exact plan tier.
 
@@ -111,7 +111,13 @@ Data lives at `~/.local/share/bismyth-lead-tui`, or `BISMYTH_TUI_DATA`. Configur
 
 Submitted and uncertain enquiries are deduplicated across saved submit-mode runs using the normalized phone/email and canonical project URL. Different listing URLs for the same development are not guaranteed to deduplicate. Generic confirmation wording may need a site-specific selector override. Login-dependent entry buttons may themselves initiate portal actions; preview only guarantees that this engine does not call its final submit step.
 
-The meeting target is 100–300 projects per run. Discovery can return fewer projects, and queued/prepared projects are not successful enquiries. Phone verification, site limits, changing forms and unavailable search results can prevent reaching the target. CAPTCHAs require a person to complete the provider’s own verification in Chrome; the TUI detects the challenge and pauses with a clear Continue/Skip choice. Real portal enquiry submissions have not been performed during development.
+The meeting target is 100–300 projects per run. Discovery can return fewer projects, and queued/prepared projects are not successful enquiries. Phone verification, site limits, changing forms and unavailable search results can prevent reaching the target. Real portal enquiry submissions have not been performed during development.
+
+## Automatic CAPTCHA attempts
+
+During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using your saved ChatGPT subscription. It validates each tile choice, rejects changed screenshots, passes existing selections to the model, and makes at most four image decisions within a two-minute attempt budget. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
+
+A checkbox tick or a model response never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Unsupported providers, audio challenges, provider blocks, invalid decisions and exhausted attempts show the reason and hand off to Chrome. A failed attempt is not automatically repeated while you recheck the same page. OTPs and consent remain manual. Fixtures and a real subscription vision request verify the implementation, but live portal CAPTCHA acceptance is not yet established.
 
 WhatsApp automation, AI conversations, manager extraction, calling and CRM integration remain outside this package.
 
@@ -119,6 +125,13 @@ WhatsApp automation, AI conversations, manager extraction, calling and CRM integ
 
 ```bash
 npm test
+```
+
+To additionally test the real subscription against a synthetic challenge (consumes account usage):
+
+```bash
+npm run build
+BISMYTH_TEST_SUBSCRIPTION_VISION=1 node --test dist/tests/captcha.test.js
 ```
 
 Tests cover validation, persistence, duplicate prevention, cancellation, pause/resume, conservative recovery, subscription environment isolation, guided UI rendering and real headless Chromium against a local property-form fixture. Use a supported Node runtime for the test command. Verification reports are in `docs/reports/`.

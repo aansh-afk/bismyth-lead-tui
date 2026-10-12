@@ -7,6 +7,8 @@ import type {Adapter} from './adapters.js';
 import {project, siteForUrl} from './model.js';
 import type {Config, Project, Site} from './model.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
+import {attemptCaptcha, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
+import type {CaptchaResult, GridSolver} from './captcha.js';
 
 export type Handoff = (message: string) => Promise<'continue' | 'skip'>;
 export interface Prepared {ready: boolean; reason: string; baseline: string[]}
@@ -15,6 +17,7 @@ export interface Driver {
   prepare(item: Project, config: Config, navigate?: boolean): Promise<Prepared>;
   submit(item: Project): Promise<boolean>;
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
+  verifyCaptcha?(): Promise<CaptchaResult>;
   close(): Promise<void>;
 }
 export async function browserPath(preferred = ''): Promise<string> {
@@ -28,7 +31,8 @@ export class PortalBrowser implements Driver {
   page?: Page;
   private definitions: Record<Site, Adapter> = structuredClone(adapters);
   private decisionController = new AbortController();
-  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription) {}
+  private captchaFailure?: {url: string; result: CaptchaResult};
+  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription) {}
   async start(config: Config): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
     this.definitions = await loadAdapters(config.adapterFile);
@@ -43,9 +47,18 @@ export class PortalBrowser implements Driver {
     return this.page;
   }
   async navigate(url: string): Promise<void> {
+    this.captchaFailure = undefined;
     const response = await this.page!.goto(url, {waitUntil: 'domcontentloaded'});
     if (response && response.status() >= 400) throw new Error('Site returned HTTP ' + response.status());
     await this.settle();
+  }
+  async verifyCaptcha(): Promise<CaptchaResult> {
+    const page = this.page!;
+    if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
+    if (this.captchaFailure?.url === page.url() && !await tokenPresent(page)) return this.captchaFailure.result;
+    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha);
+    if (result.pending) this.captchaFailure = {url: page.url(), result};
+    return result;
   }
   private async settle(): Promise<void> {
     await this.page!.waitForLoadState('domcontentloaded').catch(() => undefined);
@@ -111,6 +124,11 @@ export class PortalBrowser implements Driver {
     const searchSeeds = seeds.filter(url => !pattern.test(new URL(url).pathname));
     if (!searchSeeds.length && !seeds.length) {
       await this.navigate(definition.home);
+      let homeChallenge = await this.verifyCaptcha();
+      while (homeChallenge.pending) {
+        if (await handoff(`${site}: ${homeChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
+        homeChallenge = await this.verifyCaptcha();
+      }
       const city = config.city.toLowerCase();
       const intent = config.intent;
       const entry = await page.evaluate(([location, mode]) => {
@@ -141,17 +159,22 @@ export class PortalBrowser implements Driver {
     for (const seed of searchSeeds) {
       await checkpoint();
       await this.navigate(seed);
-      let challenge = await page.evaluate(() => /verifycaptcha|captcha/i.test(location.pathname) || /complete (?:the )?captcha|verify you are human|security checkup/i.test(document.body.innerText));
-      while (challenge) {
-        const answer = await handoff(`${site}: this site requires human CAPTCHA verification in Chrome. Complete it there, then C continues discovery. K skips this site.`);
+      let challenge = await this.verifyCaptcha();
+      while (challenge.pending) {
+        const answer = await handoff(`${site}: ${challenge.reason} Complete verification in Chrome; C rechecks, K skips.`);
         if (answer === 'skip') return [...result.values()].slice(0, limit);
-        challenge = await page.evaluate(() => /verifycaptcha|captcha/i.test(location.pathname) || /complete (?:the )?captcha|verify you are human|security checkup/i.test(document.body.innerText));
+        challenge = await this.verifyCaptcha();
       }
       await page.waitForFunction(pattern => Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).some(link => new RegExp(pattern, 'i').test(new URL(link.href).pathname)), definition.projectPattern, {timeout: 8000}).catch(() => undefined);
       let stagnant = 0;
       const visited = new Set<string>();
       for (let step = 0; step < 60 && result.size < limit && stagnant < 3; step++) {
         await checkpoint();
+        let scrollChallenge = await this.verifyCaptcha();
+        while (scrollChallenge.pending) {
+          if (await handoff(`${site}: ${scrollChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
+          scrollChallenge = await this.verifyCaptcha();
+        }
         const previous = result.size;
         const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(node => ({url: (node as HTMLAnchorElement).href, title: (node.textContent || '').trim()})));
         for (const link of links) if (siteForUrl(link.url) === site && pattern.test(new URL(link.url).pathname)) {
@@ -190,6 +213,8 @@ export class PortalBrowser implements Driver {
     const page = await this.start(config);
     const definition = this.definitions[item.site];
     if (navigate) await this.navigate(item.url);
+    const gate = await this.verifyCaptcha();
+    if (gate.pending) return {ready: false, reason: gate.reason, baseline: []};
     const baseline = await this.evidence(item);
     // Check existing forms before opening a modal; avoid closing an already open form.
     let phone = false;
@@ -198,6 +223,8 @@ export class PortalBrowser implements Driver {
       const opened = await this.subscriptionContact();
       if (!opened) await this.clickLabels(definition.openLabels, definition.openSelector);
     }
+    const formChallenge = await this.verifyCaptcha();
+    if (formChallenge.pending) return {ready: false, reason: formChallenge.reason, baseline};
     await page.locator(definition.fields.phone.join(',')).filter({visible: true}).first().waitFor({state: 'visible', timeout: 4000}).catch(() => undefined);
     const missing: string[] = [];
     const values: Record<string, string> = {name: config.name, email: config.email, phone: config.phone, ...config.extraFields};
@@ -219,9 +246,11 @@ export class PortalBrowser implements Driver {
       if (key === 'phone') filledPhone = filled;
       if (!filled && key !== 'email') missing.push(key);
     }
+    const finalChallenge = await this.verifyCaptcha();
+    if (finalChallenge.pending) return {ready: false, reason: finalChallenge.reason, baseline};
     const blocked = await page.evaluate(() => {
       const body = document.body.innerText;
-      if (/verify (?:your )?(?:phone|mobile)|enter (?:the )?otp|one.time (?:password|code)|captcha|verify you are human|access denied/i.test(body)) return 'Verification or login needs your attention.';
+      if (/verify (?:your )?(?:phone|mobile)|enter (?:the )?otp|one.time (?:password|code)|verify you are human|access denied/i.test(body)) return 'Verification or login needs your attention.';
       const required = Array.from(document.querySelectorAll<HTMLInputElement>('input[required], textarea[required], select[required]')).filter(node => node.getBoundingClientRect().width > 0 && !node.checkValidity());
       if (required.length) return 'Required fields or terms need your attention in Chrome.';
       return '';

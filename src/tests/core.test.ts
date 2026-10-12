@@ -156,6 +156,21 @@ test('subscription child environment excludes API keys and API gateway overrides
   try { assert.equal(subscriptionEnvironment().OPENAI_API_KEY, undefined); assert.ok(subscriptionEnvironment().PATH); }
   finally { if (before === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = before; }
 });
+test('post-submit CAPTCHA acceptance still requires independent enquiry confirmation', async () => {
+  const {store, close} = await temporary();
+  try {
+    const run = createRun({...config, mode: 'submit'}); run.projects = [item()];
+    let verified = false;
+    await new Runner(run, store, fake({verifyCaptcha: async () => { verified = true; return {pending: false, reason: ''}; }, confirmed: async () => verified})).process();
+    assert.equal(verified, true); assert.equal(counts(run).submitted, 1);
+    const unconfirmed = createRun({...config, mode: 'submit'});
+    unconfirmed.projects = [project('99acres', 'Another fixture', 'https://www.99acres.com/fixture-npxid-2')];
+    const runner = new Runner(unconfirmed, store, fake({verifyCaptcha: async () => ({pending: false, reason: ''}), confirmed: async () => false}));
+    runner.on('handoff', () => runner.continue('skip'));
+    await runner.process();
+    assert.equal(counts(unconfirmed).submitted, 0); assert.equal(counts(unconfirmed).uncertain, 1);
+  } finally { await close(); }
+});
 test('India-only state/city data and validation reject mismatches and typos', () => {
   assert.equal(indiaStates.length, 36);
   assert.ok(citiesForState('MH').includes('Mumbai')); assert.ok(citiesForState('MH').includes('Pune'));
