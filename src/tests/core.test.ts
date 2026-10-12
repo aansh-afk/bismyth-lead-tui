@@ -408,7 +408,7 @@ test('guided terminal view shows subscription, next steps, and explicit review c
   const review = renderView({...view, screen: 1, run, review: 0});
   assert.ok(review.includes('Test forms')); assert.ok(review.includes('Send enquiries')); assert.ok(review.includes('Back to queue'));
   const compact = renderView({...view, width: 80, height: 24}); assert.ok(compact.includes('Start a property enquiry run'));
-  assert.ok(renderView({...view, width: 40}).includes('Resize your terminal'));
+  assert.ok(renderView({...view, width: 40}).includes('Resize to at least 70'));
 });
 test('run feedback animates work and accurately labels pause, browser handoff and completion', () => {
   const run = createRun(config); run.state = 'running'; run.projects = [item()];
@@ -432,7 +432,7 @@ test('run feedback animates work and accurately labels pause, browser handoff an
     assert.equal(rendered, renderView({...current, animationFrame: 1}));
   }
   run.state = 'paused'; assert.match(renderView(view), /Enter \/ P Resume/);
-  run.state = 'running'; assert.match(renderView({...view, handoff: 'Fixture'}), /Enter \/ C Continue/);
+  run.state = 'running'; assert.match(renderView({...view, handoff: 'Fixture'}), /Enter\/C Recheck/);
   assert.match(renderView({...view, active: false}), /Enter \/ Ctrl\+R Review queue/);
 });
 test('subscription child environment excludes API keys and API gateway overrides', () => {

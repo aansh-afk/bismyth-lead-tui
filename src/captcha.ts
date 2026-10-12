@@ -127,36 +127,46 @@ async function gridIdentity(panel: Locator, tiles: Locator): Promise<{instructio
   return {instruction, images: states.map(state => state.image), selected: states.flatMap((state, index) => state.selected ? [index + 1] : [])};
 }
 
-async function visiblePanelClip(page: Page, frame: Frame, panel: Locator, action?: Locator) {
-  // A nested/partially clipped challenge cannot be inferred safely from a crop.
-  if (frame.parentFrame() !== page.mainFrame()) return;
+async function visiblePanelClip(page: Page, frame: Frame, panel: Locator, action?: Locator, rejected: (reason: string) => void = () => undefined) {
+  const fail = (reason: string) => { rejected(reason); return undefined; };
+  if (frame.parentFrame() !== page.mainFrame()) return fail('The verification grid is inside a nested frame, which this capture mode does not support. Complete verification in Chrome; C rechecks.');
   const geometry = await panel.evaluate(element => {
-    const box = element.getBoundingClientRect();
     const tiles = Array.from(element.querySelectorAll('.rc-imageselect-tile')).filter(tile => tile.getClientRects().length && getComputedStyle(tile).visibility !== 'hidden');
-    if (!(box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight && !element.querySelector('canvas') && tiles.every(tile => {
-      const rect = tile.getBoundingClientRect();
-      return rect.left >= box.left && rect.top >= box.top && rect.right <= box.right && rect.bottom <= box.bottom;
-    }))) return;
+    if (element.querySelector('canvas')) return {reason: 'The verification image uses a canvas format that this capture mode does not support. Complete verification in Chrome; C rechecks.'};
+    const instruction = element.querySelector('.rc-imageselect-desc-wrapper, .rc-imageselect-desc, #instruction, h2');
+    if (!instruction || !tiles.length) return {reason: 'The verification instruction or image tiles are missing. Wait for Chrome to finish loading, then C rechecks.'};
+    const required = [instruction, ...tiles].map(node => node.getBoundingClientRect());
+    if (required.some(rect => rect.width <= 0 || rect.height <= 0 || rect.left < 0 || rect.top < 0 || rect.right > innerWidth || rect.bottom > innerHeight)) return {reason: 'The instruction or image grid is clipped inside the site’s verification window. Bring the complete grid into view in Chrome, then C rechecks.'};
+    // Google can place its footer/tab loop a pixel beyond the frame. Capture the
+    // complete instruction and tiles; the unrelated root/footer is not evidence
+    // of a clipped image. Verify is checked independently before its action.
+    const left = Math.min(...required.map(rect => rect.left)); const top = Math.min(...required.map(rect => rect.top));
+    const right = Math.max(...required.map(rect => rect.right)); const bottom = Math.max(...required.map(rect => rect.bottom));
+    const root = element.getBoundingClientRect();
     const points = (rect: DOMRect) => [[rect.left + 1, rect.top + 1], [rect.right - 1, rect.top + 1], [rect.left + 1, rect.bottom - 1], [rect.right - 1, rect.bottom - 1], [rect.left + rect.width / 2, rect.top + rect.height / 2]];
-    return {x: box.left, y: box.top, points: [box, ...tiles.map(tile => tile.getBoundingClientRect())].flatMap(points)};
+    return {reason: '', x: root.left, y: root.top, left, top, width: right - left, height: bottom - top, points: required.flatMap(points)};
   });
-  if (!geometry) return;
-  const box = await panel.boundingBox();
+  if (geometry.reason) return fail(geometry.reason);
+  const root = await panel.boundingBox();
+  if (!root) return fail('The verification grid disappeared during capture. Wait for the portal to settle, then C rechecks.');
+  const box = {x: root.x + geometry.left! - geometry.x!, y: root.y + geometry.top! - geometry.y!, width: geometry.width!, height: geometry.height!};
   const viewport = await page.evaluate(() => ({width: innerWidth, height: innerHeight}));
-  if (!box || box.x < 0 || box.y < 0 || box.x + box.width > viewport.width || box.y + box.height > viewport.height) return;
+  if (box.x < 0 || box.y < 0 || box.x + box.width > viewport.width || box.y + box.height > viewport.height) return fail('The instruction or image grid is outside Chrome’s visible viewport. Bring the grid into view or maximise Chrome, then C rechecks.');
   const frameElement = await frame.frameElement();
-  const points = geometry.points.map(([x, y]) => [x + box.x - geometry.x, y + box.y - geometry.y]);
-  if (action) {
-    if (!await action.evaluate(element => {
-      const box = element.getBoundingClientRect();
-      return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight && [[box.left + 1, box.top + 1], [box.right - 1, box.bottom - 1], [box.left + box.width / 2, box.top + box.height / 2]].every(([x, y]) => element.contains(document.elementFromPoint(x, y)));
-    })) return;
-    const target = await action.boundingBox();
-    if (!target || target.x < 0 || target.y < 0 || target.x + target.width > viewport.width || target.y + target.height > viewport.height) return;
-    points.push([target.x + 1, target.y + 1], [target.x + target.width - 1, target.y + target.height - 1], [target.x + target.width / 2, target.y + target.height / 2]);
-  }
-  if (!await frameElement.evaluate((element, points) => points.every(([x, y]) => document.elementFromPoint(x, y) === element), points)) return;
-  return box;
+  try {
+    const points = geometry.points!.map(([x, y]) => [x + root.x - geometry.x!, y + root.y - geometry.y!]);
+    if (action) {
+      if (!await action.evaluate(element => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight && [[box.left + 1, box.top + 1], [box.right - 1, box.bottom - 1], [box.left + box.width / 2, box.top + box.height / 2]].every(([x, y]) => element.contains(document.elementFromPoint(x, y)));
+      })) return fail('The verification control is clipped or covered in Chrome. Bring it into view, then C rechecks.');
+      const target = await action.boundingBox();
+      if (!target || target.x < 0 || target.y < 0 || target.x + target.width > viewport.width || target.y + target.height > viewport.height) return fail('The verification control is outside Chrome’s visible viewport. Bring it into view, then C rechecks.');
+      points.push([target.x + 1, target.y + 1], [target.x + target.width - 1, target.y + target.height - 1], [target.x + target.width / 2, target.y + target.height / 2]);
+    }
+    if (!await frameElement.evaluate((element, points) => points.every(([x, y]) => document.elementFromPoint(x, y) === element), points)) return fail('The instruction or image grid is covered or clipped by another part of the page. Close any overlapping popup or bring the grid into view, then C rechecks.');
+    return box;
+  } finally { await frameElement.dispose(); }
 }
 
 export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: GridSolver = solveGridWithSubscription, solveAudio?: AudioSolver, activity: CaptchaActivity = async () => undefined, timing: Partial<CaptchaLimits> = {}, checkpoint: () => Promise<void> = async () => undefined): Promise<CaptchaResult> {
@@ -322,8 +332,9 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
       if (!grid) return await fallback(`Image-grid wait expired: ${loadingReason}. Enter rechecks; K skips.`);
       const {frame: challengeFrame, panel, tiles, count} = grid;
       await check();
-      const clip = await visiblePanelClip(page, challengeFrame, panel);
-      if (!clip) return await fallback('The complete image grid is not visible or uses an unsupported canvas. Enlarge Chrome or complete verification there; no automatic scrolling or tile clicks.');
+      let visibilityReason = '';
+      const clip = await visiblePanelClip(page, challengeFrame, panel, undefined, reason => { visibilityReason = reason; });
+      if (!clip) return await fallback(visibilityReason);
       const identity = await gridIdentity(panel, tiles);
       const image = await page.screenshot({clip, caret: 'initial', timeout: 5000});
       if (JSON.stringify(identity) !== JSON.stringify(await gridIdentity(panel, tiles))) { await activity('CAPTCHA: images changed during capture; waiting for a stable grid.'); if (++staleAnswers >= 3) return await fallback('Image grid keeps changing; automatic clicks paused.'); continue; }
@@ -359,12 +370,15 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
         for (const tile of choices) {
           const element = tiles.nth(tile - 1);
           if (!await element.evaluate(node => node.classList.contains('rc-imageselect-tileselected') || node.getAttribute('aria-pressed') === 'true')) {
+            let actionReason = '';
             const applied = await click(element, async () => {
-              if (!await panel.isVisible().catch(() => false) || !await visiblePanelClip(page, challengeFrame, panel, element)) return false;
+              if (!await panel.isVisible().catch(() => false) || !await visiblePanelClip(page, challengeFrame, panel, element, reason => { actionReason = reason; })) return false;
               const current = await gridIdentity(panel, tiles);
               return identity.instruction === current.instruction && JSON.stringify(identity.images) === JSON.stringify(current.images) && !current.selected.includes(tile);
             });
             if (!applied) {
+              if (await completionObserved()) return await finish();
+              if (actionReason) return await fallback(actionReason);
               await activity('CAPTCHA: grid moved or images refreshed during selection; discarding the remaining choices.');
               if (++staleAnswers >= 3) return await fallback('Image grid keeps changing; automatic clicks paused.');
               refreshed = true; break;
@@ -379,7 +393,10 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
         const signature = JSON.stringify(identity);
         if (signature === verifiedIdentity) return await fallback('Verify did not change or accept this image challenge; automatic clicks paused instead of retrying.');
         const verify = challengeFrame.locator('#recaptcha-verify-button');
-        if (!await click(verify, async () => Boolean(await panel.isVisible().catch(() => false) && await visiblePanelClip(page, challengeFrame, panel, verify)) && signature === JSON.stringify(await gridIdentity(panel, tiles)))) {
+        let actionReason = '';
+        if (!await click(verify, async () => Boolean(await panel.isVisible().catch(() => false) && await visiblePanelClip(page, challengeFrame, panel, verify, reason => { actionReason = reason; })) && signature === JSON.stringify(await gridIdentity(panel, tiles)))) {
+          if (await completionObserved()) return await finish();
+          if (actionReason) return await fallback(actionReason);
           if (++staleAnswers >= 3) return await fallback('Image grid keeps changing; automatic clicks paused.');
           continue;
         }

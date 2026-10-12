@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.11/bismyth-lead-tui-0.1.11.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.12/bismyth-lead-tui-0.1.12.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.11/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.12/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -71,6 +71,8 @@ npm start
 **Ctrl+R** finds properties from Set up, or opens the test/send chooser for the current queue on another screen. **Enter** on Review queue opens that same chooser; press Enter again to start the selected mode. During a run, Enter resumes a pause or continues after you complete a browser prompt. A spinner and elapsed time show active discovery/form processing even when no new log arrives. Paused runs, browser handoffs, stopping and finished runs use static status labels, and the animation stops when work ends.
 
 Use a terminal at least 70 columns by 22 rows. Wider terminals show a workflow sidebar; smaller supported terminals show section tabs. Undersized terminals ask you to resize while keeping progress.
+
+Browser prompts wrap across several lines. Press **E** to read the complete current message; **↑/↓**, **Page Up/Down**, **Home/End** scroll it and **E/Esc** returns. Run controls remain available in that view. Messages longer than the footer explicitly offer Full message instead of silently truncating the reason or controls. The details view closes when that browser step changes or completes.
 
 ## Import URLs and adjust adapters
 
@@ -129,7 +131,7 @@ During discovery, contact preparation and post-submit verification, the app atte
 
 The app never clicks an offered audio button, downloads audio or invokes speech recognition during normal runs. If audio mode is already open, it uses an observed enabled image-mode button once to return to images. Without that button it reports the missing image mode. Missing grids, model errors or uncertain decisions retain an image-only handoff. Hidden legacy tiles are excluded from numbering. Changed instructions or tile images discard the stale answer within the attempt bounds. Activity reports loading diagnostics, **GPT-6 Luna · low reasoning**, request budgets, answer arrival and actual tile clicks. Quit and relaunch after upgrading so an already running process loads the new solver.
 
-Image capture uses one viewport crop without scrolling around individual tiles. The complete panel and grid must fit visibly in Chrome; clipped or nested challenges and canvas grids produce a handoff. Hover decorations do not trigger repeated image requests. Browser clicks are spaced by at least one second, with 1.5 seconds for images to settle after a selection batch. Selecting every tile, repeating already selected tiles, three consecutive stale answers or exceeding eighteen tile clicks ends the automatic cycle. An unchanged challenge receives only one Verify click. **P** holds subsequent CAPTCHA actions; **S** cancels pending model calls and clicks and closes the browser. A click already dispatched can finish before Pause takes effect.
+Image capture uses one viewport crop of the complete instruction and all image tiles, without scrolling around individual elements. An overflowing dialog footer does not reject an otherwise visible grid. The app separately checks a tile or Verify control immediately before clicking it. Clipped instructions/tiles, page obstruction, nested frames and canvas formats each report a specific handoff reason. Hover decorations do not trigger repeated image requests. Browser clicks are spaced by at least one second, with 1.5 seconds for images to settle after a selection batch. Selecting every tile, repeating already selected tiles, three consecutive stale answers or exceeding eighteen tile clicks ends the automatic cycle. An unchanged challenge receives only one Verify click. **P** holds subsequent CAPTCHA actions; **S** cancels pending model calls and clicks and closes the browser. A click already dispatched can finish before Pause takes effect.
 
 These guards limit incorrect or repetitive actions; they do not establish that Luna recognizes every street scene correctly. The prompt requires the exact requested object and asks for a handoff when uncertain, but a model can still return an incorrect valid tile list. Image freshness uses instructions, image URLs and crop metadata; pixel changes behind an unchanged image URL are not independently detected. Live provider acceptance remains unverified.
 

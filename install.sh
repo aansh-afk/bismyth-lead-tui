@@ -5,7 +5,7 @@ command -v node >/dev/null 2>&1 || { echo 'Node.js 20.19+ is required. Install N
 command -v npm >/dev/null 2>&1 || { echo 'npm is required. Install Node.js with npm, then rerun this command.' >&2; exit 1; }
 node -e 'const [major,minor]=process.versions.node.split(".").map(Number); if(major<20 || major===20 && minor<19) process.exit(1)' || { echo 'Node.js 20.19+ is required.' >&2; exit 1; }
 
-release_version=${BISMYTH_TUI_VERSION:-0.1.11}
+release_version=${BISMYTH_TUI_VERSION:-0.1.12}
 install_prefix=${BISMYTH_INSTALL_PREFIX:-"$HOME/.local"}
 case "$release_version" in ''|*[!0-9A-Za-z.-]*) echo 'Invalid release version.' >&2; exit 1;; esac
 release_url="https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v${release_version}/bismyth-lead-tui-${release_version}.tgz"

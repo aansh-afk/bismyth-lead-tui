@@ -7,7 +7,7 @@ import {PortalBrowser} from './browser.js';
 import {Runner} from './runner.js';
 import {Store} from './store.js';
 import {loadAdapters} from './adapters.js';
-import {renderView} from './terminal-view.js';
+import {messageDetailLayout, renderView} from './terminal-view.js';
 import {subscriptionStatus} from './subscription.js';
 import {indiaStates, citiesForState} from './locations.js';
 export {clean} from './terminal-view.js';
@@ -36,6 +36,7 @@ export class TerminalApp {
   private editing?: {field: Field; buffer: string};
   private notice = 'Enter your search and contact profile. Press ? for keyboard help.';
   private help = false;
+  private details?: {offset: number; message: string};
   private runner?: Runner;
   private current?: Run;
   private history: Run[] = [];
@@ -110,6 +111,21 @@ export class TerminalApp {
     }
     if (key.name === 'q') { void this.shutdown(); return; }
     if (this.busy) return;
+    if (key.name === 'e') {
+      this.details = this.details ? undefined : {offset: 0, message: this.runner?.handoffMessage || this.notice};
+      this.render(); return;
+    }
+    if (this.details) {
+      if (key.name === 'escape') { this.details = undefined; this.render(); return; }
+      if (['up', 'down', 'pageup', 'pagedown', 'home', 'end'].includes(key.name || '')) {
+        const layout = messageDetailLayout({width: process.stdout.columns || 100, height: process.stdout.rows || 30, handoff: this.runner?.handoffMessage || '', notice: this.notice, details: this.details, active: Boolean(this.runner?.active), run: this.current});
+        const step = key.name === 'pageup' || key.name === 'pagedown' ? layout.pageSize : 1;
+        this.details.offset = key.name === 'home' ? 0 : key.name === 'end' ? layout.maxOffset : Math.min(layout.maxOffset, Math.max(0, layout.offset + (key.name === 'up' || key.name === 'pageup' ? -step : step)));
+        this.render(); return;
+      }
+      if (['return', 'c', 'k', 's', 'tab'].includes(key.name || '') || text && /^[1-4]$/.test(text)) this.details = undefined;
+      else if (key.name !== 'p') return;
+    }
     if (text && /^[1-4]$/.test(text)) { this.screen = Number(text) - 1; this.render(); return; }
     if (key.name === 'tab') { this.screen = (this.screen + (key.shift ? 3 : 1)) % 4; this.render(); return; }
     if (text === '?') { this.help = !this.help; this.render(); return; }
@@ -253,6 +269,7 @@ export class TerminalApp {
   }
   private render = (): void => {
     if (this.closing) return;
+    if (this.details && this.details.message !== (this.runner?.handoffMessage || this.notice)) this.details = undefined;
     const animating = this.runner?.active && !this.runner.paused && !this.runner.stopped && !this.runner.handoffMessage && ['discovering', 'running'].includes(this.current?.state || '');
     if (animating) {
       this.elapsedMs = Date.now() - this.startedAt;
@@ -266,6 +283,7 @@ export class TerminalApp {
       screen: this.screen, selected: this.selected, config: this.config,
       run: this.current, history: this.history, advanced: this.advanced,
       notice: this.notice, help: this.help, handoff: this.runner?.handoffMessage || '',
+      details: this.details,
       active: Boolean(this.runner?.active), auth: this.auth, review: this.review,
       animationFrame: this.animationFrame, elapsedMs: this.elapsedMs, stopping: Boolean(this.runner?.active && this.runner.stopped),
       editing: this.editing ? {label: this.editing.field.label, buffer: this.editing.buffer, hint: this.editing.field.hint} : undefined,
