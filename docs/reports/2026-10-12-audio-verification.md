@@ -35,6 +35,8 @@ The final tarball contains **26 entries**, including `scripts/transcribe-audio.p
 
 Installed that tarball into a clean temporary npm prefix with install scripts disabled. Its package metadata reported version 0.1.5, the Python helper and blocked-discovery runtime were present, and the installed `doctor` command found Chrome, the saved ChatGPT login and the prepared private audio environment. `git diff --check` passed.
 
+Published source commit `a83ea5a` and [release v0.1.5](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.5). GitHub's asset digest matched the local SHA-256. The tagged public installer installed version 0.1.5 into another clean prefix; its installed doctor command again reported Chrome, ChatGPT login and ready audio support against the prepared isolated data directory.
+
 ## Failures found and corrected
 
 - A combined selector originally selected a hidden audio button before a visible answer field. Filtering visible matches in the shared iframe helper fixed offered-audio detection.
