@@ -9,6 +9,7 @@ export type GridSolver = (image: Uint8Array, count: number, signal: AbortSignal,
 export interface CaptchaResult {pending: boolean; reason: string; blocked?: boolean}
 export type CaptchaActivity = (message: string) => Promise<void>;
 export interface CaptchaLimits {imageLoadMs: number; totalMs: number; maxDecisions: number}
+const imagePanelSelector = '#rc-imageselect, .rc-imageselect';
 
 export function gridDecision(value: unknown, count: number): GridDecision | undefined {
   if (!value || typeof value !== 'object') return;
@@ -39,7 +40,7 @@ async function readyImageFrame(page: Page): Promise<{grid?: {frame: Frame; panel
   let reason = 'no visible image panel';
   for (const frame of page.frames()) {
     if (frame === page.mainFrame() || !await (await frame.frameElement()).isVisible().catch(() => false)) continue;
-    const panels = frame.locator('.rc-imageselect').filter({visible: true});
+    const panels = frame.locator(imagePanelSelector).filter({visible: true});
     for (let index = 0; index < await panels.count(); index++) {
       const panel = panels.nth(index);
       const tiles = panel.locator('.rc-imageselect-tile').filter({visible: true});
@@ -70,7 +71,7 @@ export async function captchaPending(page: Page): Promise<boolean> {
   const gate = await page.evaluate(() => /verifycaptcha|captcha/i.test(location.pathname) || /complete (?:the )?captcha|verify you are human|security checkup/i.test(document.body.innerText));
   if (gate) return true;
   if (await tokenPresent(page)) return false;
-  if (await visibleFrame(page, '#recaptcha-anchor, .rc-imageselect, #audio-response, .rc-doscaptcha-body-text')) return true;
+  if (await visibleFrame(page, '#recaptcha-anchor, #rc-imageselect, .rc-imageselect, #audio-response, .rc-doscaptcha-body-text')) return true;
   return Boolean(await page.locator('iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare.com"]').filter({visible: true}).count());
 }
 
@@ -167,7 +168,7 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
     const anchorFrame = await visibleFrame(page, '#recaptcha-anchor');
     const anchor = anchorFrame?.locator('#recaptcha-anchor');
     let checkboxClicked = false;
-    if (anchor && await anchor.getAttribute('aria-checked') !== 'true' && !await visibleFrame(page, '.rc-imageselect')) {
+    if (anchor && await anchor.getAttribute('aria-checked') !== 'true' && !await visibleFrame(page, imagePanelSelector)) {
       boundedSignal.throwIfAborted();
       await anchor.click({timeout: 2000});
       checkboxClicked = true;

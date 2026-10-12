@@ -23,21 +23,31 @@ test('real Chromium CAPTCHA flow validates provider acceptance, fresh image deci
     } else if (request.url === '/widget-checkbox' || request.url === '/widget-stalled') {
       response.end(`<div id="recaptcha-anchor" role="checkbox" aria-checked="false" onclick="this.setAttribute('aria-checked','true');${request.url === '/widget-checkbox' ? "parent.postMessage('accepted','*')" : ''}">I'm not a robot</div>`);
     } else if (request.url?.startsWith('/widget')) {
-      const count = request.url === '/widget16' ? 16 : 9;
+      const table = request.url === '/widget-table-33' || request.url === '/widget-table-44';
+      const count = request.url === '/widget16' || request.url === '/widget-table-44' ? 16 : 9;
+      const columns = count === 16 ? 4 : 3;
+      const legacy = request.url === '/widget-class';
+      const panelSelector = legacy ? '.rc-imageselect' : '#rc-imageselect';
       const hiddenTiles = request.url === '/widget-hidden-tiles' ? '<button class="rc-imageselect-tile" hidden>Inactive legacy tile</button>' : '';
       const hiddenImage = request.url === '/widget-hidden-image' ? '<span style="display:none"><img src="/broken-image.png"></span>' : '';
-      const accepted = "parent.postMessage('accepted','*');document.querySelector('.rc-imageselect').hidden=true";
+      const accepted = `parent.postMessage('accepted','*');document.querySelector('${panelSelector}').hidden=true`;
       const acceptAfterVerify = request.url === '/widget-delayed-accepted' ? `setTimeout(()=>{${accepted}},600)` : accepted;
-      response.end(`<html><body><div id="recaptcha-anchor" role="checkbox" aria-checked="false" onclick="this.setAttribute('aria-checked','true'); document.querySelector('.rc-imageselect').hidden=false">I'm not a robot</div>
-        <div class="rc-imageselect" hidden><h2 id="instruction">Select all red squares</h2><div style="display:grid;grid-template-columns:repeat(${count === 16 ? 4 : 3},90px);gap:2px">
-        ${Array.from({length: count}, (_, index) => `<button class="rc-imageselect-tile" style="width:90px;height:90px;background:${[0, 2].includes(index) ? 'red' : 'blue'}" onclick="this.classList.toggle('rc-imageselect-tileselected');this.setAttribute('aria-pressed',String(this.classList.contains('rc-imageselect-tileselected')))">${index + 1}${index === 0 ? hiddenImage : ''}</button>`).join('')}
-        ${hiddenTiles}</div><button id="recaptcha-verify-button" onclick="if(JSON.stringify([...document.querySelectorAll('.rc-imageselect-tile')].flatMap((element,index)=>element.classList.contains('rc-imageselect-tileselected')?[index+1]:[]))==='[1,3]'){${acceptAfterVerify}}">Verify</button></div></body></html>`);
+      const toggle = "this.classList.toggle('rc-imageselect-tileselected');this.setAttribute('aria-pressed',String(this.classList.contains('rc-imageselect-tileselected')))";
+      const grid = table
+        ? `<div class="rc-imageselect-target"><table class="rc-imageselect-table-${columns}${columns}" style="border-spacing:2px"><tbody>${Array.from({length: columns}, (_, row) => `<tr>${Array.from({length: columns}, (_, column) => {
+          const index = row * columns + column;
+          const svg = encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="90" height="90"><rect width="90" height="90" fill="${[0, 2].includes(index) ? 'red' : 'blue'}"/><text x="40" y="48" fill="white">${index + 1}</text></svg>`);
+          return `<td class="rc-imageselect-tile" role="button" aria-pressed="false" style="padding:0;width:90px;height:90px" onclick="${toggle}"><div class="rc-image-tile-wrapper"><img class="rc-image-tile-${columns}${columns}" src="data:image/svg+xml,${svg}" style="display:block;width:90px;height:90px"></div></td>`;
+        }).join('')}</tr>`).join('')}</tbody></table></div><button id="recaptcha-audio-button" onclick="this.setAttribute('data-clicked','yes')">Audio</button>`
+        : `<div style="display:grid;grid-template-columns:repeat(${columns},90px);gap:2px">${Array.from({length: count}, (_, index) => `<button class="rc-imageselect-tile" style="width:90px;height:90px;background:${[0, 2].includes(index) ? 'red' : 'blue'}" onclick="${toggle}">${index + 1}${index === 0 ? hiddenImage : ''}</button>`).join('')}${hiddenTiles}</div>`;
+      response.end(`<html><body><div id="recaptcha-anchor" role="checkbox" aria-checked="false" onclick="this.setAttribute('aria-checked','true'); document.querySelector('${panelSelector}').hidden=false">I'm not a robot</div>
+        <div ${legacy ? 'class="rc-imageselect"' : 'id="rc-imageselect"'} aria-modal="true" role="dialog" hidden><h2 id="instruction">Select all red squares</h2>${grid}<button id="recaptcha-verify-button" onclick="this.setAttribute('data-clicked','yes');if(JSON.stringify([...document.querySelectorAll('.rc-imageselect-tile')].flatMap((element,index)=>element.classList.contains('rc-imageselect-tileselected')?[index+1]:[]))==='[1,3]'){${acceptAfterVerify}}">Verify</button></div></body></html>`);
     } else if (request.url === '/done') response.end('<h1>Property results</h1>');
     else {
       const address = server.address(); assert.ok(address && typeof address === 'object');
       const stuck = request.url === '/captcha-stuck';
       const property = request.url === '/property';
-      const widget = request.url === '/captcha16' ? '/widget16' : request.url === '/captcha-hidden-tiles' ? '/widget-hidden-tiles' : request.url === '/captcha-hidden-image' ? '/widget-hidden-image' : request.url === '/captcha-delayed-accepted' ? '/widget-delayed-accepted' : request.url === '/captcha-checkbox' ? '/widget-checkbox' : request.url === '/captcha-stalled' ? '/widget-stalled' : '/widget';
+      const widget = request.url === '/captcha-table-33' ? '/widget-table-33' : request.url === '/captcha-table-44' ? '/widget-table-44' : request.url === '/captcha-class' ? '/widget-class' : request.url === '/captcha16' ? '/widget16' : request.url === '/captcha-hidden-tiles' ? '/widget-hidden-tiles' : request.url === '/captcha-hidden-image' ? '/widget-hidden-image' : request.url === '/captcha-delayed-accepted' ? '/widget-delayed-accepted' : request.url === '/captcha-checkbox' ? '/widget-checkbox' : request.url === '/captcha-stalled' ? '/widget-stalled' : '/widget';
       const late = request.url === '/captcha-late';
       response.end(`<html><body><h1>${property ? 'Property details' : 'Complete the CAPTCHA'}</h1>${property ? '<input name="name" required><input name="phone" type="tel" required><input name="email" type="email" required>' : ''}<iframe title="reCAPTCHA" src="${late ? 'about:blank' : `http://localhost:${address.port}${widget}`}" style="width:400px;height:570px"></iframe><textarea name="g-recaptcha-response" hidden></textarea><button disabled onclick="location.href='/done'">Proceed</button><script>${late ? `setTimeout(()=>document.querySelector('iframe').src='http://localhost:${address.port}/widget-checkbox',600);` : ''}addEventListener('message',event=>{if(event.data==='accepted'){document.querySelector('textarea').value='fixture-provider-token';${property ? "document.querySelector('iframe').hidden=true;" : ''}${stuck ? '' : "document.querySelector('button').disabled=false"}}})</script></body></html>`);
     }
@@ -73,6 +83,47 @@ test('real Chromium CAPTCHA flow validates provider acceptance, fresh image deci
       });
       assert.equal(result.pending, false); assert.equal(decisions, 2);
       assert.equal(new URL(page.url()).pathname, '/done'); assert.equal(await captchaPending(page), false);
+    });
+    const assertIdTableGrid = async (columns: 3 | 4) => {
+      await page.goto(base + `/captcha-table-${columns}${columns}`);
+      const frame = page.frames()[1];
+      const panel = frame.locator('#rc-imageselect');
+      assert.equal(await panel.getAttribute('class'), null, 'Google image dialogs use an ID without the legacy class');
+      assert.equal(await panel.getAttribute('role'), 'dialog');
+      assert.equal(await panel.getAttribute('aria-modal'), 'true');
+      assert.equal(await frame.locator(`.rc-imageselect-table-${columns}${columns} td.rc-imageselect-tile`).count(), columns ** 2);
+      let decisions = 0;
+      const activity: string[] = [];
+      const result = await attemptCaptcha(page, new AbortController().signal, async (image, count, _signal, selected) => {
+        assert.ok(image.length > 100);
+        assert.equal(count, columns ** 2);
+        assert.deepEqual(selected, decisions ? [1, 3] : []);
+        assert.equal(await frame.locator('#recaptcha-audio-button').getAttribute('data-clicked'), null);
+        assert.equal(await frame.locator('#recaptcha-verify-button').getAttribute('data-clicked'), null);
+        assert.equal(await frame.locator('td.rc-imageselect-tileselected').count(), decisions ? 2 : 0);
+        return ++decisions === 1 ? {action: 'select', tiles: [1, 3]} : {action: 'verify', tiles: []};
+      }, undefined, async message => { activity.push(message); }, {imageLoadMs: 200, maxDecisions: 2});
+      assert.equal(result.pending, false, result.reason);
+      assert.equal(decisions, 2, 'an injected image decision selects tiles and then verifies them');
+      assert.ok(activity.some(message => /verifying the image selection/.test(message)));
+      assert.ok(!activity.some(message => /switching.*audio|Google speech recognition/.test(message)));
+      assert.equal(new URL(page.url()).pathname, '/done', 'Verify must accept tiles 1 and 3 before the portal proceeds');
+    };
+    await context.test('ID-only Google dialog supports a 3 by 3 table of image tiles', async () => {
+      await assertIdTableGrid(3);
+    });
+    await context.test('ID-only Google dialog supports a 4 by 4 table of image tiles', async () => {
+      await assertIdTableGrid(4);
+    });
+    await context.test('legacy class-based image dialogs remain supported', async () => {
+      await page.goto(base + '/captcha-class'); let decisions = 0;
+      assert.equal(await page.frames()[1].locator('#rc-imageselect').count(), 0);
+      const result = await attemptCaptcha(page, new AbortController().signal, async (_image, _count, _signal, selected) => {
+        assert.deepEqual(selected, decisions ? [1, 3] : []);
+        return ++decisions === 1 ? {action: 'select', tiles: [1, 3]} : {action: 'verify', tiles: []};
+      }, undefined, undefined, {imageLoadMs: 200, maxDecisions: 2});
+      assert.equal(result.pending, false, result.reason); assert.equal(decisions, 2);
+      assert.equal(new URL(page.url()).pathname, '/done');
     });
     await context.test('Verify on the final allowed decision waits for asynchronous provider acceptance', async () => {
       await page.goto(base + '/captcha-delayed-accepted'); let decisions = 0;
