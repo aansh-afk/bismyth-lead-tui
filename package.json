@@ -1,12 +1,12 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Interactive property enquiry CLI with Playwright and ChatGPT-backed Codex decisions",
   "license": "MIT",
   "repository": {"type": "git", "url": "git+https://github.com/aansh-afk/bismyth-lead-tui.git"},
   "homepage": "https://github.com/aansh-afk/bismyth-lead-tui#readme",
   "bin": {"bismyth-leads": "launch.mjs"},
-  "files": ["launch.mjs", "dist/*.js", "data", "examples", "install.sh"],
+  "files": ["launch.mjs", "dist/*.js", "data", "examples", "install.sh", "scripts/transcribe-audio.py"],
   "type": "module",
   "engines": {
     "node": ">=20.19"
@@ -15,7 +15,7 @@
     "build": "tsc",
     "prepack": "npm run build",
     "start": "node launch.mjs",
-    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/browser.test.js dist/tests/captcha.test.js dist/tests/listing-api.test.js dist/tests/api-browser.test.js",
+    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/browser.test.js dist/tests/captcha.test.js dist/tests/listing-api.test.js dist/tests/api-browser.test.js dist/tests/audio-browser.test.js dist/tests/audio-captcha.test.js dist/tests/doctor-audio.test.js",
     "test:batches": "npm run build && node --test dist/tests/batches.test.js"
   },
   "dependencies": {

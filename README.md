@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.4/bismyth-lead-tui-0.1.4.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.5/bismyth-lead-tui-0.1.5.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.4/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.5/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -31,7 +31,7 @@ bismyth-leads doctor
 
 Each machine uses its own Codex login. The installer does not copy credentials, install a browser or change your shell.
 
-`bismyth-leads doctor-fix` creates local app storage and, when missing, installs Codex and Chromium on supported Linux package-manager hosts. It asks for `sudo` only for Chromium installation. ChatGPT login and OTP verification remain interactive steps; the command prints the exact next action when one is needed.
+`bismyth-leads doctor-fix` creates local app storage and, when missing, installs Codex, Chromium and audio prerequisites on supported Linux package-manager hosts. It uses `sudo` for system packages and creates a private Python environment for audio transcription. ChatGPT login and OTP verification remain interactive steps; the command prints the exact next action when one is needed.
 
 ```bash
 bismyth-leads --help
@@ -93,7 +93,7 @@ The browser's AI decisions now use **Codex CLI with your saved ChatGPT login**. 
 ```bash
 codex login                         # choose Sign in with ChatGPT
 bismyth-leads doctor                 # checks Chrome and ChatGPT login
-bismyth-leads doctor-fix             # installs Codex/Chromium where possible
+bismyth-leads doctor-fix             # repairs Codex, Chrome and audio setup
 bismyth-leads check-subscription     # makes one real, small decision
 ```
 
@@ -123,9 +123,11 @@ The meeting target is 100–300 projects per run. Discovery can return fewer pro
 
 ## Automatic CAPTCHA attempts
 
-During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using your saved ChatGPT subscription. It validates each tile choice, rejects changed screenshots, passes existing selections to the model, and makes at most four image decisions within a two-minute attempt budget. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
+During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using your saved ChatGPT subscription. When an audio challenge is already visible or the provider offers an audio button, it can transcribe that challenge using Google speech recognition. Each automatic cycle has a two-minute budget, at most four image decisions and two audio answers. Enter permits a second cycle on the same page for late-loading or transient challenges; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
 
-A checkbox tick or a model response never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Unsupported providers, audio challenges, provider blocks, invalid decisions and exhausted attempts show the reason and hand off to Chrome. A failed attempt is not automatically repeated while you recheck the same page. OTPs and consent remain manual. Fixtures and a real subscription vision request verify the implementation, but live portal CAPTCHA acceptance is not yet established.
+A checkbox tick or a transcription never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Changed images/audio, invalid decisions and exhausted attempts produce a visible reason. Provider “Try again later” blocks are detected before solver calls: discovery preserves found properties and continues to other selected websites. The app does not repeatedly request an audio challenge when the provider has blocked it. OTPs and consent remain manual. Live 99acres provider-block clearance is not established.
+
+Audio support requires Python 3.9+, FFmpeg and `SpeechRecognition==3.17.0`. Run `bismyth-leads doctor-fix` to prepare `audio-venv` inside app storage. `BISMYTH_AUDIO_PYTHON` can select an existing interpreter; doctor-fix preserves that override. Audio downloads are limited to observed Google/reCAPTCHA HTTPS payload URLs and bounded sizes. Conversion and transcription have deadlines, are cancelled when the run stops, and retain no audio files. Only challenge audio is sent to Google; contact details are not sent. This audio service is separate from your ChatGPT subscription. Its shared-key recognition route may be refused or unavailable; it does not guarantee successful CAPTCHA verification. The supplied repository's source was not copied.
 
 WhatsApp automation, AI conversations, manager extraction, calling and CRM integration remain outside this package.
 

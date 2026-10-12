@@ -1,10 +1,12 @@
 import type {Frame, Page} from 'playwright-core';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {subscriptionJSON} from './subscription.js';
+import {isRecaptchaAudioUrl, solveAudioWithGoogle} from './audio-captcha.js';
+import type {AudioSolver} from './audio-captcha.js';
 
 export interface GridDecision {action: 'select' | 'verify' | 'manual'; tiles: number[]}
 export type GridSolver = (image: Uint8Array, count: number, signal: AbortSignal, selected?: number[]) => Promise<unknown>;
-export interface CaptchaResult {pending: boolean; reason: string}
+export interface CaptchaResult {pending: boolean; reason: string; blocked?: boolean}
 
 export function gridDecision(value: unknown, count: number): GridDecision | undefined {
   if (!value || typeof value !== 'object') return;
@@ -24,7 +26,7 @@ export const solveGridWithSubscription: GridSolver = (image, count, signal, sele
 async function visibleFrame(page: Page, selector: string): Promise<Frame | undefined> {
   for (const frame of page.frames()) {
     if (frame === page.mainFrame()) continue;
-    const element = frame.locator(selector).first();
+    const element = frame.locator(selector).filter({visible: true}).first();
     if (!await element.isVisible().catch(() => false)) continue;
     if (await (await frame.frameElement()).isVisible().catch(() => false)) return frame;
   }
@@ -35,17 +37,25 @@ export async function tokenPresent(page: Page): Promise<boolean> {
   return page.locator('[name="g-recaptcha-response"]').evaluateAll(elements => elements.some(element => Boolean((element as HTMLTextAreaElement).value.trim())));
 }
 
+export async function captchaBlocked(page: Page): Promise<boolean> {
+  const selector = '.rc-doscaptcha-body-text, .rc-doscaptcha-header-text';
+  return Boolean(await visibleFrame(page, selector)) || await page.locator(selector).first().isVisible().catch(() => false);
+}
+export const blockedCaptcha: CaptchaResult = {pending: true, blocked: true, reason: 'CAPTCHA provider blocked automated queries (Try again later). No audio challenge is available.'};
+
 export async function captchaPending(page: Page): Promise<boolean> {
   const gate = await page.evaluate(() => /verifycaptcha|captcha/i.test(location.pathname) || /complete (?:the )?captcha|verify you are human|security checkup/i.test(document.body.innerText));
   if (gate) return true;
   if (await tokenPresent(page)) return false;
-  if (await visibleFrame(page, '#recaptcha-anchor, .rc-imageselect')) return true;
+  if (await visibleFrame(page, '#recaptcha-anchor, .rc-imageselect, #audio-response, .rc-doscaptcha-body-text')) return true;
   return Boolean(await page.locator('iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare.com"]').filter({visible: true}).count());
 }
 
-export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: GridSolver = solveGridWithSubscription): Promise<CaptchaResult> {
+export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: GridSolver = solveGridWithSubscription, solveAudio: AudioSolver = solveAudioWithGoogle): Promise<CaptchaResult> {
   if (!await captchaPending(page)) return {pending: false, reason: ''};
-  const boundedSignal = AbortSignal.any([signal, AbortSignal.timeout(120000)]);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new Error('CAPTCHA attempt timed out.')), 120000);
+  const boundedSignal = AbortSignal.any([signal, controller.signal]);
   const initialUrl = page.url();
   const dedicatedGate = /verifycaptcha|captcha/i.test(new URL(initialUrl).pathname);
   const pending = (reason: string): CaptchaResult => ({pending: true, reason});
@@ -62,7 +72,65 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
     }
     return pending('CAPTCHA widget accepted, but the portal has not cleared its verification page.');
   };
+  const audio = async (): Promise<CaptchaResult | undefined> => {
+    if (await captchaBlocked(page)) return blockedCaptcha;
+    let frame = await visibleFrame(page, '#audio-response, #recaptcha-audio-button');
+    if (!frame) return undefined;
+    try {
+      if (!await frame.locator('#audio-response').isVisible()) {
+        const button = frame.locator('#recaptcha-audio-button');
+        if (!await button.isEnabled()) return pending('The provider has disabled the audio challenge.');
+        boundedSignal.throwIfAborted(); await button.click({timeout: 2000});
+      }
+      for (let poll = 0; poll < 32; poll++) {
+        boundedSignal.throwIfAborted();
+        if (await captchaBlocked(page)) return blockedCaptcha;
+        frame = await visibleFrame(page, '#audio-response');
+        if (frame && await frame.locator('#audio-source').getAttribute('src').catch(() => null)) break;
+        await sleep(250, undefined, {signal: boundedSignal});
+      }
+      if (!frame) return pending('Audio challenge did not load. Enter rechecks; K skips.');
+      for (let round = 0; round < 2; round++) {
+        boundedSignal.throwIfAborted();
+        if (await captchaBlocked(page)) return blockedCaptcha;
+        const source = frame.locator('#audio-source');
+        const url = await source.getAttribute('src');
+        if (!url || !isRecaptchaAudioUrl(url)) return pending('Unsupported audio challenge URL.');
+        const transcript = await solveAudio(url, boundedSignal);
+        boundedSignal.throwIfAborted();
+        if (await captchaBlocked(page)) return blockedCaptcha;
+        if (await source.getAttribute('src') !== url) return pending('Audio CAPTCHA changed during transcription; no stale answer was submitted.');
+        if (typeof transcript !== 'string' || !/^[a-z0-9][a-z0-9 '\-.,?!]{0,255}$/i.test(transcript.trim())) return pending('Audio CAPTCHA transcription was empty or invalid.');
+        await frame.locator('#audio-response').fill(transcript.trim(), {timeout: 2000});
+        boundedSignal.throwIfAborted();
+        if (await captchaBlocked(page)) return blockedCaptcha;
+        if (await source.getAttribute('src') !== url) return pending('Audio CAPTCHA changed while entering the answer; no stale answer was submitted.');
+        await frame.locator('#recaptcha-verify-button').click({timeout: 2000});
+        for (let poll = 0; poll < 32; poll++) {
+          boundedSignal.throwIfAborted();
+          if (await tokenPresent(page)) return finish();
+          if (dedicatedGate && page.url() !== initialUrl && !await captchaPending(page)) return {pending: false, reason: ''};
+          if (await captchaBlocked(page)) return blockedCaptcha;
+          if (await frame.locator('.rc-audiochallenge-error-message').isVisible().catch(() => false)) break;
+          await sleep(250, undefined, {signal: boundedSignal});
+        }
+        if (round === 0 && await source.getAttribute('src') === url) {
+          const reload = frame.locator('#recaptcha-reload-button');
+          if (!await reload.isVisible() || !await reload.isEnabled()) break;
+          boundedSignal.throwIfAborted(); await reload.click({timeout: 2000});
+          for (let poll = 0; poll < 32 && await source.getAttribute('src') === url; poll++) await sleep(250, undefined, {signal: boundedSignal});
+          if (await source.getAttribute('src') === url) break;
+        }
+      }
+      return pending('Audio CAPTCHA was not accepted within two attempts. Enter rechecks; K skips.');
+    } catch (error) {
+      if (boundedSignal.aborted) throw error;
+      return pending('Audio CAPTCHA unavailable: ' + (error as Error).message);
+    }
+  };
+  const fallback = async (reason: string): Promise<CaptchaResult> => await audio() || pending(reason);
   try {
+    if (await captchaBlocked(page)) return blockedCaptcha;
     const anchorFrame = await visibleFrame(page, '#recaptcha-anchor');
     const anchor = anchorFrame?.locator('#recaptcha-anchor');
     let checkboxClicked = false;
@@ -77,9 +145,11 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
       for (let poll = 0; poll < 32; poll++) {
         boundedSignal.throwIfAborted();
         if (await tokenPresent(page)) break;
+        if (await captchaBlocked(page)) return blockedCaptcha;
         if (dedicatedGate && page.url() !== initialUrl && !await captchaPending(page)) return {pending: false, reason: ''};
         challengeFrame = await visibleFrame(page, '.rc-imageselect');
         if (challengeFrame) break;
+        if (await visibleFrame(page, '#audio-response, #recaptcha-audio-button')) { const result = await audio(); if (result) return result; }
         if (!checkboxClicked) {
           const lateAnchor = (await visibleFrame(page, '#recaptcha-anchor'))?.locator('#recaptcha-anchor');
           if (lateAnchor && await lateAnchor.getAttribute('aria-checked') !== 'true') {
@@ -91,25 +161,28 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
       if (await tokenPresent(page)) {
         return await finish();
       }
-      if (!challengeFrame) return pending('No supported image challenge appeared, or the provider has not accepted the checkbox.');
-      if (await challengeFrame.locator('.rc-doscaptcha-body-text').isVisible()) return pending('CAPTCHA provider blocked further attempts.');
+      if (!challengeFrame) return await fallback('No supported challenge appeared, or the provider has not accepted the checkbox. Enter rechecks; K skips.');
       const panel = challengeFrame.locator('.rc-imageselect').first();
       const tiles = panel.locator('.rc-imageselect-tile');
       const count = await tiles.count();
-      if (![9, 16].includes(count)) return pending('Unsupported CAPTCHA grid; complete it in Chrome.');
+      if (![9, 16].includes(count)) return await fallback('Unsupported CAPTCHA grid; complete it in Chrome.');
       const image = await panel.screenshot({timeout: 2000});
-      const tileImages = await Promise.all(Array.from({length: count}, (_, index) => tiles.nth(index).screenshot({timeout: 2000})));
+      const tileImages: Buffer[] = [];
+      for (let index = 0; index < count; index++) { boundedSignal.throwIfAborted(); tileImages.push(await tiles.nth(index).screenshot({timeout: 5000})); }
       const selected = await tiles.evaluateAll(elements => elements.flatMap((element, index) => element.classList.contains('rc-imageselect-tileselected') || element.getAttribute('aria-pressed') === 'true' ? [index + 1] : []));
-      const decision = gridDecision(await solve(image, count, boundedSignal, selected), count);
+      let value: unknown;
+      try { value = await solve(image, count, boundedSignal, selected); }
+      catch (error) { if (boundedSignal.aborted) throw error; const result = await audio(); if (result) return result; throw error; }
+      const decision = gridDecision(value, count);
       boundedSignal.throwIfAborted();
-      if (!decision || decision.action === 'manual') return pending('CAPTCHA image decision was uncertain or invalid.');
-      if (!image.equals(await panel.screenshot({timeout: 2000}))) return pending('CAPTCHA changed while being analysed; no stale selection was clicked.');
+      if (!decision || decision.action === 'manual') return await fallback('CAPTCHA image decision was uncertain or invalid.');
+      if (!image.equals(await panel.screenshot({timeout: 2000}))) return await fallback('CAPTCHA changed while being analysed; no stale selection was clicked.');
       if (decision.action === 'select') {
         for (const tile of decision.tiles) {
           boundedSignal.throwIfAborted();
           const element = tiles.nth(tile - 1);
           if (!await element.evaluate(node => node.classList.contains('rc-imageselect-tileselected') || node.getAttribute('aria-pressed') === 'true')) {
-            if (!tileImages[tile - 1].equals(await element.screenshot({timeout: 2000}))) return pending('CAPTCHA tile changed during selection; complete the refreshed challenge in Chrome.');
+            if (!tileImages[tile - 1].equals(await element.screenshot({timeout: 2000}))) return await fallback('CAPTCHA tile changed during selection; complete the refreshed challenge in Chrome.');
             await element.click({timeout: 2000});
           }
         }
@@ -119,9 +192,9 @@ export async function attemptCaptcha(page: Page, signal: AbortSignal, solve: Gri
       }
     }
     if (await tokenPresent(page)) return await finish();
-    return pending('CAPTCHA attempt limit reached.');
+    return await fallback('CAPTCHA attempt limit reached.');
   } catch (error) {
     if (signal.aborted) throw error;
     return pending(boundedSignal.aborted ? 'CAPTCHA attempt timed out.' : 'CAPTCHA attempt failed: ' + (error as Error).message);
-  }
+  } finally { clearTimeout(timer); }
 }

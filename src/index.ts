@@ -7,13 +7,14 @@ import {Store} from './store.js';
 import {TerminalApp} from './tui.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
 import {doctorFix} from './doctor.js';
+import {audioPrerequisites} from './audio-captcha.js';
 
 const help = `Bismyth property enquiry TUI
 
 Usage:
   bismyth-leads                       Interactive terminal app
   bismyth-leads doctor                Check runtime, Chrome and ChatGPT login
-  bismyth-leads doctor-fix            Repair Codex and Chromium where possible
+  bismyth-leads doctor-fix            Repair browser, Codex and audio prerequisites
   bismyth-leads check-subscription    Verify ChatGPT login with a real decision
   bismyth-leads history               List saved runs
   bismyth-leads export ID csv|json     Export a saved run
@@ -22,6 +23,7 @@ Usage:
 Node >=20.19 and Chrome/Chromium are required.
 Local data: BISMYTH_TUI_DATA (defaults to ~/.local/share/bismyth-lead-tui)
 Browser: BISMYTH_BROWSER_PATH or the Chrome path in Setup.
+Audio Python override: BISMYTH_AUDIO_PYTHON (otherwise private app environment).
 `;
 async function lock(directory: string): Promise<() => Promise<void>> {
   const path = join(directory, 'session.lock');
@@ -51,6 +53,8 @@ async function main(): Promise<void> {
     console.log('Node:', process.version); console.log('Data:', store.directory);
     try { console.log('Chrome:', await browserPath(config.browserPath)); } catch (error) { console.log('Chrome: missing (' + (error as Error).message + ')'); }
     try { console.log('AI:', await subscriptionStatus()); } catch (error) { console.log('AI: unavailable (' + (error as Error).message + ')'); }
+    const audio = audioPrerequisites(store.directory);
+    console.log('Audio:', audio.missing.length ? 'missing ' + audio.missing.join(', ') + ' — run bismyth-leads doctor-fix' : 'ready (Google speech recognition)');
     console.log('Saved runs:', (await store.history()).length); return;
   };
   if (command === 'doctor') {
@@ -59,7 +63,7 @@ async function main(): Promise<void> {
   if (command === 'doctor-fix') {
     const config = await store.config();
     console.log('Preparing local Bismyth data…');
-    const repaired = await doctorFix({findBrowser: () => browserPath(config.browserPath)});
+    const repaired = await doctorFix({findBrowser: () => browserPath(config.browserPath), dataDirectory: store.directory});
     for (const action of repaired.actions) console.log(action);
     if (repaired.browser) console.log('Chrome ready:', repaired.browser);
     console.log(''); await doctor(); return;

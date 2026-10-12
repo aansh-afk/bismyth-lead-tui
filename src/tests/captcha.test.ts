@@ -81,7 +81,7 @@ test('real Chromium CAPTCHA flow validates provider acceptance, stale images, fa
         if (!selected?.length) return {action: 'select', tiles: [1, 3]};
         assert.deepEqual(selected, [1, 3]); return {action: 'verify', tiles: []};
       });
-      assert.equal(result.pending, false); assert.equal(new URL(page.url()).pathname, '/done');
+      assert.equal(result.pending, false, result.reason); assert.equal(new URL(page.url()).pathname, '/done');
     });
     await context.test('invalid choices produce no tile clicks', async () => {
       await page.goto(base + '/captcha');
@@ -133,18 +133,21 @@ test('real Chromium CAPTCHA flow validates provider acceptance, stale images, fa
         assert.equal(new URL(integration.page!.url()).pathname, '/property');
       } finally { await integration.close(); }
     });
-    await context.test('failed attempts are cached while the operator rechecks the same page', async () => {
+    await context.test('the operator can retry once before failed automatic attempts are bounded', async () => {
       let calls = 0;
       const integration = new PortalBrowser(join(directory, 'failure'), true, async () => undefined, async () => { calls++; return {action: 'manual', tiles: []}; });
       try {
         await integration.start(config); await integration.navigate(base + '/captcha');
         assert.equal((await integration.verifyCaptcha()).pending, true);
         assert.equal((await integration.verifyCaptcha()).pending, true);
-        assert.equal(calls, 1);
+        assert.equal(calls, 2);
+        const bounded = await integration.verifyCaptcha();
+        assert.equal(bounded.pending, true); assert.match(bounded.reason, /limit/i);
+        assert.equal(calls, 2);
         await integration.page!.frames()[1].evaluate(() => { parent.postMessage('accepted', '*'); });
         await integration.page!.waitForFunction(() => Boolean((document.querySelector('textarea[name="g-recaptcha-response"]') as HTMLTextAreaElement).value));
         assert.equal((await integration.verifyCaptcha()).pending, false);
-        assert.equal(calls, 1); assert.equal(new URL(integration.page!.url()).pathname, '/done');
+        assert.equal(calls, 2); assert.equal(new URL(integration.page!.url()).pathname, '/done');
       } finally { await integration.close(); }
     });
     if (process.env.BISMYTH_TEST_SUBSCRIPTION_VISION === '1') await context.test('real ChatGPT subscription interprets a cropped synthetic challenge', {timeout: 95000}, async () => {

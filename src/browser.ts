@@ -7,7 +7,9 @@ import type {Adapter} from './adapters.js';
 import {project, siteForUrl} from './model.js';
 import type {Config, Project, Site} from './model.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
-import {attemptCaptcha, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
+import {attemptCaptcha, blockedCaptcha, captchaBlocked, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
+import {solveAudioWithGoogle} from './audio-captcha.js';
+import type {AudioSolver} from './audio-captcha.js';
 import type {CaptchaResult, GridSolver} from './captcha.js';
 import {discoverPublicListings} from './listing-api.js';
 import type {PublicListingContext} from './listing-api.js';
@@ -90,9 +92,9 @@ export class PortalBrowser implements Driver {
   page?: Page;
   private definitions: Record<Site, Adapter> = structuredClone(adapters);
   private decisionController = new AbortController();
-  private captchaFailure?: {url: string; result: CaptchaResult};
+  private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
-  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch) {}
+  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio: AudioSolver = (url, signal) => solveAudioWithGoogle(url, signal, this.dataDirectory)) {}
   takeDiscoveryNotes(): string[] { return this.discoveryNotes.splice(0); }
   async start(config: Config): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
@@ -116,9 +118,11 @@ export class PortalBrowser implements Driver {
   async verifyCaptcha(): Promise<CaptchaResult> {
     const page = this.page!;
     if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
-    if (this.captchaFailure?.url === page.url() && !await tokenPresent(page)) return this.captchaFailure.result;
-    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha);
-    if (result.pending) this.captchaFailure = {url: page.url(), result};
+    if (await captchaBlocked(page)) return blockedCaptcha;
+    const attempts = this.captchaFailure?.url === page.url() ? this.captchaFailure.attempts : 0;
+    if (attempts >= 2 && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
+    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio);
+    this.captchaFailure = result.pending ? {url: page.url(), result, attempts: attempts + 1} : undefined;
     return result;
   }
   private async settle(): Promise<void> {
@@ -198,6 +202,7 @@ export class PortalBrowser implements Driver {
       await this.navigate(definition.home);
       let homeChallenge = await this.verifyCaptcha();
       while (homeChallenge.pending) {
+        if (homeChallenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
         if (await handoff(`${site}: ${homeChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
         homeChallenge = await this.verifyCaptcha();
       }
@@ -234,6 +239,7 @@ export class PortalBrowser implements Driver {
       await this.navigate(seed);
       let challenge = await this.verifyCaptcha();
       while (challenge.pending) {
+        if (challenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
         const answer = await handoff(`${site}: ${challenge.reason} Complete verification in Chrome; C rechecks, K skips.`);
         if (answer === 'skip') return [...result.values()].slice(0, limit);
         challenge = await this.verifyCaptcha();
@@ -264,6 +270,7 @@ export class PortalBrowser implements Driver {
         await checkpoint();
         let scrollChallenge = await this.verifyCaptcha();
         while (scrollChallenge.pending) {
+          if (scrollChallenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
           if (await handoff(`${site}: ${scrollChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
           scrollChallenge = await this.verifyCaptcha();
         }
