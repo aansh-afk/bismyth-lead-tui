@@ -22,6 +22,8 @@ Final `npm test` passed **94 tests, 0 failures, 0 skipped**, in **59.384 seconds
 
 The final tarball contains **26 entries** and is **65,697 bytes**. SHA-256: `7d99b86dbe65737841395c7ee3125f0e02818b02bd4c0ef5aacfa2c53d90f4c1`. A clean temporary npm prefix installed version 0.1.7 with scripts disabled. Its runtime contains image-readiness waiting, Luna activity messages and runner activity wiring. Installed doctor validation uses isolated app data and the previously prepared private audio environment. `git diff --check` passed.
 
+Published source commit `3a63b2c` and [release v0.1.7](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.7). GitHub's asset digest matches the local tarball. The public source-pinned installer upgraded the user's `~/.local` package to 0.1.7. Its installed runtime contains the readiness fix and Luna activity messages; the personal-profile SHA-256 is unchanged. The tagged public installer downloaded successfully and is byte-identical to the script used for the upgrade. Doctor checks reported Chrome, saved ChatGPT login and ready audio. The user's already running TUI was left running; it must quit and relaunch to load the new code.
+
 ## Limits
 
 Fixtures demonstrate the race fix and configured model integration. Real 99acres CAPTCHA acceptance is not established. A provider block already encountered in an existing browser challenge remains a block; the fix prevents the premature audio switch on subsequent image challenges. No live property enquiry was submitted, no app run was cleared during this repair, and no global Codex model setting was changed.
