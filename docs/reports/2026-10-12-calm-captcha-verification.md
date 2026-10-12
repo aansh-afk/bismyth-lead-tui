@@ -30,7 +30,7 @@ The final tarball has **26 entries, 69,101 bytes**, SHA-256 `6eb247b24692ae3d893
 
 Final ordinary suite after all fixes: **128 tests passed, zero failures/skips, 116.011 seconds**. The default-spacing measurement in this run was **1459.1ms**. This suite uses injected model decisions for browser mechanics and separate fake-CLI checks for model/auth configuration; the real vision observation is reported separately above.
 
-Public release and user installation results will be added after completion.
+Published source commit `739a616` and [release v0.1.10](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.10). GitHub's asset digest matches the tested tarball. The public tagged installer was byte-identical to the tested source installer and upgraded the user's `~/.local` installation to **0.1.10**. Installed CAPTCHA and Runner runtime files match the built release exactly. Doctor confirmed saved ChatGPT login, Chrome, Luna Low and automatic audio disabled; the previously configured optional audio helper remains unused. All ten saved runs are preserved. Personal-profile SHA-256 after installation matches the pre-upgrade hash exactly. The old app PID is no longer active; run `bismyth-leads` to load the update.
 
 ## Limits
 
