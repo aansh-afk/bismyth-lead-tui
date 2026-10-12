@@ -17,6 +17,7 @@ export class Runner extends EventEmitter {
   constructor(readonly run: Run, private readonly store: Store, private readonly driver: Driver) {
     super();
     driver.setActivity?.(message => this.record(message));
+    driver.setCheckpoint?.(() => this.checkpoint());
   }
   private async record(message: string): Promise<void> {
     this.run.events.push({at: new Date().toISOString(), message});

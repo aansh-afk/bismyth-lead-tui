@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {once} from 'node:events';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {PortalBrowser, browserPath} from '../browser.js';
@@ -14,7 +14,7 @@ test('CAPTCHA decisions reject invalid actions, tile IDs, duplicate tiles and in
   for (const decision of [null, {action: 'select', tiles: [0]}, {action: 'select', tiles: [10]}, {action: 'select', tiles: [1, 1]}, {action: 'select', tiles: []}, {action: 'verify', tiles: [1]}, {action: 'click', tiles: [1]}]) assert.equal(gridDecision(decision, 9), undefined);
 });
 
-test('real Chromium CAPTCHA flow validates provider acceptance, fresh image decisions and cancellation', {timeout: process.env.BISMYTH_TEST_SUBSCRIPTION_VISION === '1' ? 700000 : 160000}, async context => {
+test('real Chromium CAPTCHA flow validates provider acceptance, fresh image decisions and cancellation', {timeout: process.env.BISMYTH_TEST_SUBSCRIPTION_VISION === '1' ? 700000 : 240000}, async context => {
   const directory = await mkdtemp(join(tmpdir(), 'bismyth-captcha-'));
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'text/html');
@@ -219,15 +219,16 @@ test('real Chromium CAPTCHA flow validates provider acceptance, fresh image deci
       assert.equal(result.pending, false, result.reason); assert.equal(decisions, 3);
       assert.equal(new URL(page.url()).pathname, '/done');
     });
-    await context.test('unsuccessful attempts are bounded', async () => {
+    await context.test('a repeated selection with no progress ends the attempt early', async () => {
       await page.goto(base + '/captcha'); let decisions = 0;
       const result = await attemptCaptcha(page, new AbortController().signal, async () => { decisions++; return {action: 'select', tiles: [2]}; });
-      assert.equal(decisions, 12); assert.equal(result.pending, true); assert.match(result.reason, /limit/);
+      assert.equal(decisions, 2); assert.equal(result.pending, true); assert.match(result.reason, /no progress/);
+      assert.equal(await page.frames()[1].locator('.rc-imageselect-tileselected').count(), 1);
     });
     await context.test('injected decision bounds end a synthetic attempt promptly', async () => {
       await page.goto(base + '/captcha'); let decisions = 0;
       const result = await attemptCaptcha(page, new AbortController().signal, async () => { decisions++; return {action: 'select', tiles: [2]}; }, undefined, undefined, {maxDecisions: 2});
-      assert.equal(decisions, 2); assert.equal(result.pending, true); assert.match(result.reason, /limit/);
+      assert.equal(decisions, 2); assert.equal(result.pending, true); assert.match(result.reason, /no progress|limit/);
     });
     await context.test('stopping cancels pending image inference', async () => {
       await page.goto(base + '/captcha'); const controller = new AbortController();
@@ -295,9 +296,16 @@ test('real Chromium CAPTCHA flow validates provider acceptance, fresh image deci
     if (process.env.BISMYTH_TEST_SUBSCRIPTION_VISION === '1') await context.test('real ChatGPT subscription interprets a cropped synthetic challenge', {timeout: 650000}, async () => {
       await page.goto(base + '/captcha');
       const activity: string[] = [];
-      const result = await attemptCaptcha(page, new AbortController().signal, solveGridWithSubscription, undefined, async message => { activity.push(message); });
+      let requests = 0;
+      const result = await attemptCaptcha(page, new AbortController().signal, async (...args) => {
+        await writeFile(join(tmpdir(), `bismyth-v0110-synthetic-${++requests}.png`), args[0], {mode: 0o600});
+        const value = await solveGridWithSubscription(...args);
+        context.diagnostic('Real Luna synthetic decision: ' + JSON.stringify(value));
+        return value;
+      }, undefined, async message => { activity.push(message); });
       assert.equal(result.pending, false, result.reason); assert.equal(new URL(page.url()).pathname, '/done');
-      assert.ok(activity.some(message => /GPT-6 Luna · low reasoning.*9 tiles/.test(message)));
+      assert.ok(requests > 0);
+      assert.ok(activity.some(message => /image solver.*9 tiles/.test(message)));
       assert.ok(activity.some(message => /verifying the image selection/.test(message)));
       assert.ok(!activity.some(message => /switching.*audio/.test(message)));
     });

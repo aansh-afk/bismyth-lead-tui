@@ -140,6 +140,71 @@ test('pause prevents processing until resumed', async () => {
     runner.pause(); await task; assert.equal(done, true);
   } finally { await close(); }
 });
+test('pause holds in-flight browser actions until the run resumes', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  let checkpoint: (() => Promise<void>) | undefined;
+  let firstAction!: () => void;
+  const started = new Promise<void>(resolve => { firstAction = resolve; });
+  let release!: () => void;
+  const nextAction = new Promise<void>(resolve => { release = resolve; });
+  const actions: number[] = [];
+  const driver = fake({
+    setCheckpoint: listener => { checkpoint = listener; },
+    prepare: async () => {
+      actions.push(1); firstAction();
+      await nextAction; await checkpoint!();
+      actions.push(2);
+      return {ready: true, reason: '', baseline: []};
+    },
+  });
+  const run = createRun(config); run.projects = [item()];
+  const runner = new Runner(run, store, driver);
+  const task = runner.process();
+  try {
+    await started; runner.pause(); release();
+    await new Promise(resolve => setTimeout(resolve, 120));
+    assert.deepEqual(actions, [1]);
+    assert.equal(run.state, 'paused');
+    runner.pause(); await task;
+    assert.deepEqual(actions, [1, 2]);
+    assert.equal(run.projects[0].status, 'prepared');
+    assert.equal(run.state, 'complete');
+  } finally { release(); await runner.stop(); await task; await close(); }
+});
+test('stop cancels in-flight browser actions waiting at a paused checkpoint', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  let checkpoint: (() => Promise<void>) | undefined;
+  let firstAction!: () => void;
+  const started = new Promise<void>(resolve => { firstAction = resolve; });
+  let release!: () => void;
+  const nextAction = new Promise<void>(resolve => { release = resolve; });
+  let checkpointEntered!: () => void;
+  const waiting = new Promise<void>(resolve => { checkpointEntered = resolve; });
+  const actions: number[] = [];
+  let closed = 0;
+  const driver = fake({
+    setCheckpoint: listener => { checkpoint = listener; },
+    prepare: async () => {
+      actions.push(1); firstAction();
+      await nextAction; checkpointEntered(); await checkpoint!();
+      actions.push(2);
+      return {ready: true, reason: '', baseline: []};
+    },
+    close: async () => { closed++; },
+  });
+  const run = createRun(config); run.projects = [item()];
+  const runner = new Runner(run, store, driver);
+  const task = runner.process();
+  try {
+    await started; runner.pause(); release(); await waiting;
+    await runner.stop(); await task;
+    assert.deepEqual(actions, [1]);
+    assert.equal(run.state, 'stopped');
+    assert.equal(run.projects[0].status, 'uncertain');
+    assert.ok(closed >= 1);
+    assert.equal((await store.load(run.id)).state, 'stopped');
+  } finally { release(); await runner.stop(); await task; await close(); }
+});
 test('discovery respects batch limit and deduplicates URLs', async () => {
   const {store, close} = await temporary();
   try {

@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.9/bismyth-lead-tui-0.1.9.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.10/bismyth-lead-tui-0.1.10.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.9/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.10/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -127,7 +127,11 @@ The meeting target is 100–300 projects per run. Discovery can return fewer pro
 
 During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. Playwright applies its validated tile selections and Verify decisions. Each automatic cycle has a ten-minute budget and at most twelve image decisions; each image-loading wait allows thirty seconds and each Luna request allows three minutes. These are upper limits, not compulsory delays. Enter permits a second cycle on the same page; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
 
-The app never clicks an offered audio button, downloads audio or invokes speech recognition during normal runs. If audio mode is already open, it uses an observed enabled image-mode button once to return to images. Without that button it reports the missing image mode. Missing grids, model errors or uncertain decisions retain an image-only handoff. Hidden legacy tiles are excluded from numbering. Changed panels or refreshed tiles discard the stale answer and continue with fresh screenshots within the attempt bounds. Activity reports loading diagnostics, **GPT-6 Luna · low reasoning**, request budgets, answer arrival, tile selection and image Verify. Quit and relaunch after upgrading so an already running process loads the new solver.
+The app never clicks an offered audio button, downloads audio or invokes speech recognition during normal runs. If audio mode is already open, it uses an observed enabled image-mode button once to return to images. Without that button it reports the missing image mode. Missing grids, model errors or uncertain decisions retain an image-only handoff. Hidden legacy tiles are excluded from numbering. Changed instructions or tile images discard the stale answer within the attempt bounds. Activity reports loading diagnostics, **GPT-6 Luna · low reasoning**, request budgets, answer arrival and actual tile clicks. Quit and relaunch after upgrading so an already running process loads the new solver.
+
+Image capture uses one viewport crop without scrolling around individual tiles. The complete panel and grid must fit visibly in Chrome; clipped or nested challenges and canvas grids produce a handoff. Hover decorations do not trigger repeated image requests. Browser clicks are spaced by at least one second, with 1.5 seconds for images to settle after a selection batch. Selecting every tile, repeating already selected tiles, three consecutive stale answers or exceeding eighteen tile clicks ends the automatic cycle. An unchanged challenge receives only one Verify click. **P** holds subsequent CAPTCHA actions; **S** cancels pending model calls and clicks and closes the browser. A click already dispatched can finish before Pause takes effect.
+
+These guards limit incorrect or repetitive actions; they do not establish that Luna recognizes every street scene correctly. The prompt requires the exact requested object and asks for a handoff when uncertain, but a model can still return an incorrect valid tile list. Image freshness uses instructions, image URLs and crop metadata; pixel changes behind an unchanged image URL are not independently detected. Live provider acceptance remains unverified.
 
 Image detection supports Google's actual `#rc-imageselect` dialog ID and the earlier `.rc-imageselect` class variant. Verification fixtures include ID-only dialogs with actual 3×3/4×4 table-cell tiles; a visible image grid is not rejected merely because its container has no class.
 

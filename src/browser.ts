@@ -79,6 +79,7 @@ export interface Driver {
   verifyCaptcha?(): Promise<CaptchaResult>;
   takeDiscoveryNotes?(): string[];
   setActivity?(activity: CaptchaActivity): void;
+  setCheckpoint?(checkpoint: () => Promise<void>): void;
   close(): Promise<void>;
 }
 export async function browserPath(preferred = ''): Promise<string> {
@@ -95,9 +96,11 @@ export class PortalBrowser implements Driver {
   private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
   private activity: CaptchaActivity = async () => undefined;
+  private checkpoint: () => Promise<void> = async () => undefined;
   constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio?: AudioSolver) {}
   takeDiscoveryNotes(): string[] { return this.discoveryNotes.splice(0); }
   setActivity(activity: CaptchaActivity): void { this.activity = activity; }
+  setCheckpoint(checkpoint: () => Promise<void>): void { this.checkpoint = checkpoint; }
   async start(config: Config): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
     this.definitions = await loadAdapters(config.adapterFile);
@@ -118,12 +121,13 @@ export class PortalBrowser implements Driver {
     await this.settle();
   }
   async verifyCaptcha(): Promise<CaptchaResult> {
+    await this.checkpoint();
     const page = this.page!;
     if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
     if (await captchaBlocked(page)) { await this.activity('CAPTCHA: ' + blockedCaptcha.reason); return blockedCaptcha; }
     const attempts = this.captchaFailure?.url === page.url() ? this.captchaFailure.attempts : 0;
     if (attempts >= 2 && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
-    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio, this.activity);
+    const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio, this.activity, {}, this.checkpoint);
     this.captchaFailure = result.pending ? {url: page.url(), result, attempts: attempts + 1} : undefined;
     return result;
   }
