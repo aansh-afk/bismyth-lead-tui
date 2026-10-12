@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.2/bismyth-lead-tui-0.1.2.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.3/bismyth-lead-tui-0.1.3.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.2/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.3/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -72,6 +72,12 @@ Use a terminal at least 70 columns by 22 rows. Wider terminals show a workflow s
 
 ## Import URLs and adjust adapters
 
+Discovery reads the selected search page once, then uses public Housing GraphQL or NoBroker REST listing responses when its active city, intent and filters can be validated. Housing requests only listing URLs, titles, IDs and pagination metadata; NoBroker preserves the page's observed search filters and reads at most two anonymous pages. Requests have time and response-size bounds, use no account credentials, and are cancelled when a run stops.
+
+Saved activity reports API properties, request counts and decoded JSON bytes. If an API refuses access or changes its response, already-found properties are retained and discovery uses the existing browser path. Small queues that already fit the initial page need no extra API request. 99acres continues to use browser discovery. API listing reads do not send enquiries; Playwright still handles contact forms and the explicit Send enquiries choice.
+
+Live verification on this machine returned 51 unique NoBroker listings in two anonymous API requests. Housing's GraphQL query worked through the browser and curl, but the app's direct Node request timed out; its 15-second fallback was verified. Other cities and rental searches have fixture coverage only where specified in the verification reports.
+
 Set **Import URL file** to a text file (one URL per line, `#` comments allowed) or a JSON string array. Press **i** for direct project URLs; press **d** to discover listings from imported search-result URLs. Imported links must belong to the supported portals and selected sites.
 
 The examples directory contains inspected public Pune project URLs and an adapter override file. Paths are relative to the directory from which you launch the app.
@@ -109,7 +115,7 @@ Data lives at `~/.local/share/bismyth-lead-tui`, or `BISMYTH_TUI_DATA`. Configur
 - **Failed:** preparation encountered an error before submission.
 - **Skipped:** manually skipped or blocked by contact/project deduplication.
 
-Submitted and uncertain enquiries are deduplicated across saved submit-mode runs using the normalized phone/email and canonical project URL. Different listing URLs for the same development are not guaranteed to deduplicate. Generic confirmation wording may need a site-specific selector override. Login-dependent entry buttons may themselves initiate portal actions; preview only guarantees that this engine does not call its final submit step.
+Submitted and uncertain enquiries are deduplicated across saved submit-mode runs using the normalized phone/email and canonical project URL. Known www/apex portal aliases normalize consistently, including saved rows with historical IDs. Different listing paths for the same development are not guaranteed to deduplicate. Generic confirmation wording may need a site-specific selector override. Login-dependent entry buttons may themselves initiate portal actions; preview only guarantees that this engine does not call its final submit step.
 
 The meeting target is 100–300 projects per run. Discovery can return fewer projects, and queued/prepared projects are not successful enquiries. Phone verification, site limits, changing forms and unavailable search results can prevent reaching the target. Real portal enquiry submissions have not been performed during development.
 
@@ -134,6 +140,6 @@ npm run build
 BISMYTH_TEST_SUBSCRIPTION_VISION=1 node --test dist/tests/captcha.test.js
 ```
 
-Tests cover validation, persistence, duplicate prevention, cancellation, pause/resume, conservative recovery, subscription environment isolation, guided UI rendering and real headless Chromium against a local property-form fixture. Use a supported Node runtime for the test command. Verification reports are in `docs/reports/`.
+Tests cover validation, persistence, duplicate prevention, cancellation, pause/resume, conservative recovery, subscription environment isolation, guided UI rendering, API pagination and timeout handling, and real headless Chromium against local property-form and API-discovery fixtures. Use a supported Node runtime for the test command. Verification reports are in `docs/reports/`.
 
 The application code is MIT licensed. The bundled India location data is separately available under the Open Database License; see `data/README.md` and `data/LICENSE-ODbL.txt`.

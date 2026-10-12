@@ -44,6 +44,8 @@ export function validateConfig(config: Config, contact = true): string[] {
 export function canonicalUrl(raw: string): string {
   const url = new URL(raw);
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an http(s) URL without credentials.');
+  const aliases: Record<string, string> = {'99acres.com': 'www.99acres.com', 'nobroker.in': 'www.nobroker.in', 'www.housing.com': 'housing.com'};
+  if (aliases[url.hostname]) url.hostname = aliases[url.hostname];
   url.hash = '';
   for (const key of [...url.searchParams.keys()]) if (/^(utm_|gclid|fbclid|fltcnt|ref$)/i.test(key)) url.searchParams.delete(key);
   url.searchParams.sort();
@@ -67,7 +69,7 @@ export function contactKey(config: Config): string {
   const phone = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
   return createHash('sha256').update(phone + ':' + config.email.trim().toLowerCase()).digest('hex');
 }
-export function duplicateKey(config: Config, item: Project): string { return contactKey(config) + ':' + item.id; }
+export function duplicateKey(config: Config, item: Project): string { return contactKey(config) + ':' + project(item.site, item.title, item.url).id; }
 export function counts(run: Run): Record<ProjectStatus, number> {
   const result: Record<ProjectStatus, number> = {queued: 0, working: 0, prepared: 0, submitted: 0, failed: 0, skipped: 0, uncertain: 0};
   for (const item of run.projects) result[item.status]++;

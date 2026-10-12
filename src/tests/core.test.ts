@@ -37,12 +37,14 @@ test('canonical URLs dedupe tracking while retaining meaningful query parameters
   assert.equal(canonicalUrl('https://housing.com/rent/123/?utm_source=a&fltcnt=b&bedrooms=2#gallery'), 'https://housing.com/rent/123?bedrooms=2');
   assert.equal(siteForUrl('https://www.99acres.com/a'), '99acres');
   assert.equal(siteForUrl('https://99acres.com.evil.test/a'), undefined);
+  assert.equal(canonicalUrl('https://nobroker.in/property/buy/flat/id/detail'), 'https://www.nobroker.in/property/buy/flat/id/detail');
   assert.throws(() => canonicalUrl('javascript:alert(1)'));
 });
 test('contact deduplication separates distinct contact profiles', () => {
   assert.equal(duplicateKey(config, item()), duplicateKey({...config, phone: '+919000000000'}, item()));
   assert.equal(duplicateKey(config, item()), duplicateKey({...config, phone: '9000000000'}, item()));
   assert.notEqual(duplicateKey(config, item()), duplicateKey({...config, phone: '9000000001'}, item()));
+  assert.equal(duplicateKey(config, {...item(), id: 'historical-id', url: 'https://99acres.com/fixture-npxid-1'}), duplicateKey(config, item()));
 });
 test('interrupted in-flight projects recover as uncertain, never queued', () => {
   const run = createRun(config); run.state = 'running'; run.projects = [{...item(), status: 'working'}];
@@ -68,6 +70,17 @@ test('preview prepares forms without calling submit', async () => {
     const run = createRun(config); run.projects = [item()]; let calls = 0;
     const runner = new Runner(run, store, fake({submit: async () => { calls++; return true; }}));
     await runner.process(); assert.equal(calls, 0); assert.equal(counts(run).prepared, 1); assert.equal(run.state, 'complete');
+  } finally { await close(); }
+});
+test('historical saved enquiry IDs still deduplicate across portal hostname aliases', async () => {
+  const {store, close} = await temporary();
+  try {
+    const before = createRun({...config, mode: 'submit'});
+    before.projects = [{...item(), id: 'historical-id', url: 'https://99acres.com/fixture-npxid-1', status: 'submitted'}];
+    await store.save(before);
+    const next = createRun({...config, mode: 'submit'}); next.projects = [item()]; let calls = 0;
+    await new Runner(next, store, fake({prepare: async () => { calls++; return {ready: true, reason: '', baseline: []}; }})).process();
+    assert.equal(calls, 0); assert.equal(counts(next).skipped, 1);
   } finally { await close(); }
 });
 test('submit needs confirmation; uncertain outcomes block future duplicate contact', async () => {

@@ -16,7 +16,7 @@ const commonFields = {
 const successPattern = '(thank you|thanks).{0,100}(enquir|interest|contact|request)|(?:enquir[yies]+|request|details).{0,60}(?:successfully (?:sent|submitted|shared)|has been (?:sent|submitted|shared))|(?:owner|advertiser|agent|seller|builder).{0,40}(?:will (?:contact|call)|contact you soon)';
 export const adapters: Record<Site, Adapter> = {
   '99acres': {site: '99acres', home: 'https://www.99acres.com/', projectPattern: '(?:-npxid-|-spid-)', openLabels: ['Contact', 'Contact Builder', 'Contact Owner', 'View Number', 'Get Callback'], submitLabels: ['Send Enquiry', 'Get Details', 'Submit', 'Contact'], fields: commonFields, successPattern},
-  nobroker: {site: 'nobroker', home: 'https://www.nobroker.in/', projectPattern: '/(?:property/|property/buy/|property/rent/|new-projects/[^/?]+/[^/?]+)', openLabels: ['Get Owner Details', 'Contact Owner', 'Contact', 'Enquire Now'], submitLabels: ['Send Enquiry', 'Submit', 'Get Owner Details'], fields: commonFields, successPattern},
+  nobroker: {site: 'nobroker', home: 'https://www.nobroker.in/', projectPattern: '/property/(?:buy|rent)/.+/detail/?$|/new-projects/[^/?]+/[^/?]+/?$', openLabels: ['Get Owner Details', 'Contact Owner', 'Contact', 'Enquire Now'], submitLabels: ['Send Enquiry', 'Submit', 'Get Owner Details'], fields: commonFields, successPattern},
   housing: {site: 'housing', home: 'https://housing.com/', projectPattern: '/(?:in/buy/(?:projects|resale)/page/|rent/\\d)', openLabels: ['Contact Sellers', 'Contact Seller', 'Contact', 'Contact Developer', 'Contact Owner'], submitLabels: ['Submit', 'Send Enquiry', 'Get Contact Details', 'Contact Seller'], fields: commonFields, successPattern},
 };
 export async function loadAdapters(path: string): Promise<Record<Site, Adapter>> {

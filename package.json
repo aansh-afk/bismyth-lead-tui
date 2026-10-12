@@ -1,6 +1,6 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Interactive property enquiry CLI with Playwright and ChatGPT-backed Codex decisions",
   "license": "MIT",
   "repository": {"type": "git", "url": "git+https://github.com/aansh-afk/bismyth-lead-tui.git"},
@@ -15,7 +15,7 @@
     "build": "tsc",
     "prepack": "npm run build",
     "start": "node launch.mjs",
-    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/browser.test.js dist/tests/captcha.test.js",
+    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/browser.test.js dist/tests/captcha.test.js dist/tests/listing-api.test.js dist/tests/api-browser.test.js",
     "test:batches": "npm run build && node --test dist/tests/batches.test.js"
   },
   "dependencies": {

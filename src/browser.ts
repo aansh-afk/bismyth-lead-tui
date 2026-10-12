@@ -9,6 +9,64 @@ import type {Config, Project, Site} from './model.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
 import {attemptCaptcha, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
 import type {CaptchaResult, GridSolver} from './captcha.js';
+import {discoverPublicListings} from './listing-api.js';
+import type {PublicListingContext} from './listing-api.js';
+
+export function publicListingContext(options: {site: Site; intent: Config['intent']; city: string}): PublicListingContext | undefined {
+  const url = new URL(location.href);
+  const sameCity = (value: unknown): boolean => typeof value === 'string' && value.toLowerCase().replace(/[\s_-]/g, '') === options.city.toLowerCase().replace(/[\s_-]/g, '');
+  if (options.site === 'housing' && url.hostname === 'housing.com') {
+    const state = (window as unknown as {__INITIAL_STATE__?: {filters?: Record<string, unknown>; routeParams?: {url?: string}}}).__INITIAL_STATE__;
+    const filters = state?.filters;
+    const city = filters?.selectedCity as Record<string, unknown> | undefined;
+    if (!filters || !city || !sameCity(city.name) || filters.service !== options.intent || filters.category !== 'residential' || typeof filters.fParam !== 'string') return;
+    if (!url.pathname.startsWith('/in/' + options.intent + '/') || typeof city.url !== 'string' || !url.pathname.split('/').includes(city.url)) return;
+    try { if (state?.routeParams?.url && new URL(state.routeParams.url, url).pathname !== url.pathname) return; } catch { return; }
+    const cityData = Object.fromEntries(['name', 'id', 'cityId', 'url', 'isTierTwo', 'products'].filter(key => city[key] !== undefined).map(key => [key, city[key]]));
+    return {site: 'housing', endpoint: 'https://mightyzeus-mum.housing.com/api/gql', hash: filters.fParam, service: options.intent, category: 'residential', city: cityData, path: url.pathname, page: Number(url.searchParams.get('page') || 1)};
+  }
+  if (options.site !== 'nobroker' || url.hostname !== 'www.nobroker.in' || options.intent !== 'buy') return;
+  let listingState: {canonicalUrl?: {completeUrl?: string; canonicalURL?: string; city?: string}} | undefined;
+  const runtime = (window as unknown as {nb?: {appState?: {listPage?: typeof listingState}}}).nb?.appState;
+  listingState = runtime?.listPage;
+  if (!listingState) {
+    for (const script of document.scripts) {
+      const text = script.textContent || '';
+      const assignment = /nb\.appState\s*=\s*/.exec(text);
+      if (!assignment || text.length > 4000000) continue;
+      const start = assignment.index + assignment[0].length;
+      let depth = 0; let quoted = false; let escaped = false;
+      for (let index = start; index < text.length; index++) {
+        const character = text[index];
+        if (quoted) {
+          if (escaped) escaped = false;
+          else if (character === '\\') escaped = true;
+          else if (character === '"') quoted = false;
+        } else if (character === '"') quoted = true;
+        else if (character === '{') depth++;
+        else if (character === '}' && --depth === 0) {
+          try { listingState = (JSON.parse(text.slice(start, index + 1)) as {listPage?: typeof listingState}).listPage; } catch { return; }
+          break;
+        }
+      }
+      if (listingState) break;
+    }
+  }
+  let search = url;
+  const canonical = listingState?.canonicalUrl;
+  if (!search.searchParams.has('searchParam')) {
+    if (!canonical?.completeUrl || canonical.canonicalURL !== url.pathname || !sameCity(canonical.city)) return;
+    try { search = new URL(canonical.completeUrl, url); } catch { return; }
+    if (search.origin !== url.origin || !search.pathname.startsWith('/property/sale/')) return;
+  }
+  if (!search.pathname.startsWith('/property/sale/')) return;
+  const city = search.searchParams.get('city') || search.pathname.split('/')[3];
+  if (!sameCity(city) || !search.searchParams.get('searchParam')) return;
+  if ([...search.searchParams.keys()].some(key => /token|cookie|authorization|session|password|email|phone|mobile|contact|userid|deviceid/i.test(key))) return;
+  const params = Object.fromEntries(search.searchParams);
+  params.city = city;
+  return {site: 'nobroker', endpoint: 'https://www.nobroker.in/api/v3/multi/property/BUY/filter', params, page: Number(params.pageNo || 1)};
+}
 
 export type Handoff = (message: string) => Promise<'continue' | 'skip'>;
 export interface Prepared {ready: boolean; reason: string; baseline: string[]}
@@ -18,6 +76,7 @@ export interface Driver {
   submit(item: Project): Promise<boolean>;
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
   verifyCaptcha?(): Promise<CaptchaResult>;
+  takeDiscoveryNotes?(): string[];
   close(): Promise<void>;
 }
 export async function browserPath(preferred = ''): Promise<string> {
@@ -32,7 +91,9 @@ export class PortalBrowser implements Driver {
   private definitions: Record<Site, Adapter> = structuredClone(adapters);
   private decisionController = new AbortController();
   private captchaFailure?: {url: string; result: CaptchaResult};
-  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription) {}
+  private discoveryNotes: string[] = [];
+  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch) {}
+  takeDiscoveryNotes(): string[] { return this.discoveryNotes.splice(0); }
   async start(config: Config): Promise<Page> {
     if (this.page && !this.page.isClosed()) return this.page;
     this.definitions = await loadAdapters(config.adapterFile);
@@ -116,6 +177,17 @@ export class PortalBrowser implements Driver {
     const definition = this.definitions[site];
     const result = new Map<string, Project>();
     const pattern = new RegExp(definition.projectPattern, 'i');
+    const collectPageLinks = async (): Promise<number> => {
+      const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(node => ({url: (node as HTMLAnchorElement).href, title: (node.textContent || '').trim()})));
+      for (const link of links) {
+        try {
+          if (siteForUrl(link.url) !== site || !pattern.test(new URL(link.url).pathname)) continue;
+          const item = project(site, link.title, link.url);
+          if (!result.has(item.id) && result.size < limit) result.set(item.id, item);
+        } catch { continue; }
+      }
+      return links.length;
+    };
     const seeds = config.seedUrls.filter(url => siteForUrl(url) === site);
     for (const url of seeds) if (pattern.test(new URL(url).pathname)) {
       const item = project(site, new URL(url).pathname.split('/').pop() || url, url);
@@ -158,12 +230,32 @@ export class PortalBrowser implements Driver {
     }
     for (const seed of searchSeeds) {
       await checkpoint();
+      if (result.size >= limit) break;
       await this.navigate(seed);
       let challenge = await this.verifyCaptcha();
       while (challenge.pending) {
         const answer = await handoff(`${site}: ${challenge.reason} Complete verification in Chrome; C rechecks, K skips.`);
         if (answer === 'skip') return [...result.values()].slice(0, limit);
         challenge = await this.verifyCaptcha();
+      }
+      await collectPageLinks();
+      if (result.size >= limit) { this.discoveryNotes.push(`${site}: initial page filled the queue without extra listing requests.`); continue; }
+      if (site !== '99acres') {
+        await page.waitForFunction(() => Boolean((window as unknown as {__INITIAL_STATE__?: unknown}).__INITIAL_STATE__) || [...document.scripts].some(script => /nb\.appState\s*=/.test(script.textContent || '')), undefined, {timeout: 2500}).catch(() => undefined);
+        const currentUrl = page.url();
+        const context = await page.evaluate(publicListingContext, {site, intent: config.intent, city: config.city});
+        if (context) {
+          const api = await discoverPublicListings(context, limit, this.decisionController.signal, async () => {
+            await checkpoint();
+            if (page.url() !== currentUrl) throw new Error('Search page changed during API discovery.');
+          }, this.listingRequest);
+          await checkpoint();
+          if (page.url() !== currentUrl) throw new Error('Search page changed during API discovery.');
+          for (const item of api.projects) if (!result.has(item.id) && result.size < limit) result.set(item.id, item);
+          this.discoveryNotes.push(`${site}: public API found ${api.projects.length} properties in ${api.requests} requests (${api.decodedBytes} decoded JSON bytes).`);
+          if (api.complete) continue;
+          this.discoveryNotes.push(`${site}: browser fallback — ${api.reason}`);
+        } else this.discoveryNotes.push(`${site}: browser discovery; public search context unavailable or unsupported.`);
       }
       await page.waitForFunction(pattern => Array.from(document.querySelectorAll<HTMLAnchorElement>('a[href]')).some(link => new RegExp(pattern, 'i').test(new URL(link.href).pathname)), definition.projectPattern, {timeout: 8000}).catch(() => undefined);
       let stagnant = 0;
@@ -176,16 +268,11 @@ export class PortalBrowser implements Driver {
           scrollChallenge = await this.verifyCaptcha();
         }
         const previous = result.size;
-        const links = await page.locator('a[href]').evaluateAll(nodes => nodes.map(node => ({url: (node as HTMLAnchorElement).href, title: (node.textContent || '').trim()})));
-        for (const link of links) if (siteForUrl(link.url) === site && pattern.test(new URL(link.url).pathname)) {
-          const item = project(site, link.title, link.url);
-          if (!result.has(item.id)) result.set(item.id, item);
-          if (result.size >= limit) break;
-        }
+        const linkCount = await collectPageLinks();
         stagnant = result.size === previous ? stagnant + 1 : 0;
         await page.evaluate(() => window.scrollBy(0, Math.max(800, window.innerHeight * 2)));
         // Infinite-scroll portals may append results asynchronously after the scroll.
-        await page.waitForFunction(previousCount => document.querySelectorAll('a[href]').length > previousCount, links.length, {timeout: 1500}).catch(() => undefined);
+        await page.waitForFunction(previousCount => document.querySelectorAll('a[href]').length > previousCount, linkCount, {timeout: 1500}).catch(() => undefined);
         if (stagnant >= 2 && !visited.has(page.url())) {
           visited.add(page.url());
           const next = await this.clickLabels(['Next', 'Next page', 'Show more', 'Load more'], definition.nextSelector || 'a[rel="next"]');

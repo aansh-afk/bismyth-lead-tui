@@ -61,6 +61,8 @@ export class Runner extends EventEmitter {
         const share = Math.ceil(remaining / (selected.length - index));
         try {
           const found = await this.driver.discover(this.run.config, site, share, () => this.checkpoint(), this.handoff);
+          for (const note of this.driver.takeDiscoveryNotes?.() || []) await this.record(note);
+          await this.checkpoint();
           if (found.length >= share) expandable.push(site);
           for (const item of found) if (!seen.has(item.id) && this.run.projects.length < this.run.config.limit) { this.run.projects.push(item); seen.add(item.id); }
           await this.record(site + ': found ' + found.length + ' projects.');
@@ -74,10 +76,13 @@ export class Runner extends EventEmitter {
         try {
           const existing = this.run.projects.filter(item => item.site === site).length;
           const found = await this.driver.discover(this.run.config, site, remaining + existing, () => this.checkpoint(), this.handoff);
+          for (const note of this.driver.takeDiscoveryNotes?.() || []) await this.record(note);
+          await this.checkpoint();
           for (const item of found) if (!seen.has(item.id) && this.run.projects.length < this.run.config.limit) { this.run.projects.push(item); seen.add(item.id); }
           await this.record(site + ': filled remaining queue capacity.');
         } catch (error) { if (this.stopped) throw new RunStopped(); await this.record(site + ': ' + (error as Error).message); }
       }
+      await this.checkpoint();
       this.run.state = 'ready';
       await this.record('Queue ready: ' + this.run.projects.length + '/' + this.run.config.limit + ' projects.');
     });
