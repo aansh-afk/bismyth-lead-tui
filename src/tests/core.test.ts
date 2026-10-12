@@ -4,6 +4,7 @@ import {mkdtemp, readFile, stat, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {once} from 'node:events';
+import {setTimeout as sleep} from 'node:timers/promises';
 import {createServer} from 'node:http';
 import {defaults, canonicalUrl, counts, createRun, duplicateKey, project, recoverRun, siteForUrl, validateConfig} from '../model.js';
 import type {Config, Project} from '../model.js';
@@ -130,6 +131,171 @@ test('manual verification can be skipped and stop resolves a pending handoff', a
     const task = runner.process(); await waiting; await runner.stop(); await task;
     assert.equal(run.state, 'stopped'); assert.equal(run.projects[0].status, 'uncertain');
   } finally { await close(); }
+});
+test('a cleared CAPTCHA handoff resumes preparation on the existing page without another navigation', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun(config); run.projects = [item()];
+  const navigations: Array<boolean | undefined> = [];
+  let reads = 0;
+  const driver = fake({
+    prepare: async (_item, _config, navigate) => {
+      navigations.push(navigate);
+      return navigations.length === 1 ? {ready: false, reason: 'CAPTCHA', baseline: [], verification: true} : {ready: true, reason: '', baseline: []};
+    },
+    verificationReady: async () => { reads++; return true; },
+  });
+  const runner = new Runner(run, store, driver);
+  const task = runner.process();
+  try {
+    await task;
+    assert.deepEqual(navigations, [undefined, false]);
+    assert.equal(reads, 1);
+    assert.equal(run.projects[0].status, 'prepared');
+    assert.ok(run.events.some(event => event.message.includes('verification cleared in Chrome')));
+  } finally { await runner.stop(); await task; await close(); }
+});
+test('CAPTCHA handoff keeps waiting while portal continuation is disabled', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun(config); run.projects = [item()];
+  let preparations = 0; let reads = 0; let portalReady = false; let readStarted!: () => void;
+  const observing = new Promise<void>(resolve => { readStarted = resolve; });
+  const runner = new Runner(run, store, fake({
+    prepare: async () => ++preparations === 1 ? {ready: false, reason: 'CAPTCHA callback pending', baseline: [], verification: true} : {ready: true, reason: '', baseline: []},
+    verificationReady: async () => { reads++; readStarted(); return portalReady; },
+  }));
+  const task = runner.process();
+  try {
+    await observing; await sleep(30);
+    assert.equal(preparations, 1);
+    assert.equal(run.projects[0].status, 'working');
+    portalReady = true; await task;
+    assert.equal(preparations, 2);
+    assert.equal(reads, 2);
+    assert.equal(run.projects[0].status, 'prepared');
+  } finally { await runner.stop(); await task; await close(); }
+});
+test('generic OTP handoffs remain manual even when CAPTCHA readiness reports true', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun(config); run.projects = [item()];
+  let preparations = 0; let reads = 0; let finished = false;
+  const runner = new Runner(run, store, fake({
+    prepare: async () => ++preparations === 1 ? {ready: false, reason: 'Enter OTP', baseline: []} : {ready: true, reason: '', baseline: []},
+    verificationReady: async () => { reads++; return true; },
+  }));
+  const waiting = once(runner, 'handoff');
+  const task = runner.process().then(() => { finished = true; });
+  try {
+    await waiting; await sleep(1150);
+    assert.equal(reads, 0);
+    assert.equal(preparations, 1);
+    assert.equal(finished, false);
+    assert.equal(run.projects[0].status, 'working');
+    runner.continue('continue'); await task;
+    assert.equal(run.projects[0].status, 'prepared');
+  } finally { await runner.stop(); await task; await close(); }
+});
+test('automatic post-submit CAPTCHA continuation leaves remaining OTP manual and never submits twice', {timeout: 8000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun({...config, mode: 'submit'}); run.projects = [item()];
+  let submissions = 0; let verifications = 0; let reads = 0; let confirmed = false;
+  const runner = new Runner(run, store, fake({
+    submit: async () => { submissions++; return true; },
+    verifyCaptcha: async () => ++verifications === 1 ? {pending: true, reason: 'CAPTCHA after Submit'} : {pending: false, reason: ''},
+    verificationReady: async () => { reads++; return true; },
+    confirmed: async () => confirmed,
+  }));
+  const firstWaiting = once(runner, 'handoff'); const task = runner.process();
+  try {
+    await firstWaiting;
+    const otpWaiting = once(runner, 'handoff'); await otpWaiting;
+    assert.match(runner.handoffMessage, /OTP or remaining steps/);
+    await sleep(1150);
+    assert.equal(reads, 1);
+    assert.equal(submissions, 1);
+    assert.equal(run.projects[0].status, 'working');
+    confirmed = true; runner.continue('continue'); await task;
+    assert.equal(run.projects[0].status, 'submitted');
+    assert.equal(submissions, 1);
+  } finally { await runner.stop(); await task; await close(); }
+});
+test('pause holds automatic CAPTCHA handoff observation until resumed', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun(config); run.projects = [item()];
+  let preparations = 0; let reads = 0;
+  const runner = new Runner(run, store, fake({
+    prepare: async () => ++preparations === 1 ? {ready: false, reason: 'CAPTCHA', baseline: [], verification: true} : {ready: true, reason: '', baseline: []},
+    verificationReady: async () => { reads++; return true; },
+  }));
+  const waiting = once(runner, 'handoff'); const task = runner.process();
+  try {
+    await waiting; runner.pause(); await sleep(1150);
+    assert.equal(reads, 0);
+    assert.equal(preparations, 1);
+    assert.equal(run.state, 'paused');
+    runner.pause(); await task;
+    assert.equal(reads, 1);
+    assert.equal(run.projects[0].status, 'prepared');
+  } finally { await runner.stop(); await task; await close(); }
+});
+test('a late CAPTCHA readiness answer after K cannot continue a later manual handoff', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const first = item(); const second = project('99acres', 'Second project', 'https://www.99acres.com/fixture-npxid-2');
+  const run = createRun(config); run.projects = [first, second];
+  let reads = 0; let finishRead!: (ready: boolean) => void; let readStarted!: () => void;
+  const observing = new Promise<void>(resolve => { readStarted = resolve; });
+  const runner = new Runner(run, store, fake({
+    prepare: async current => ({ready: false, reason: current.id === first.id ? 'First CAPTCHA' : 'Second OTP', baseline: [], verification: current.id === first.id}),
+    verificationReady: async () => { reads++; readStarted(); return new Promise<boolean>(resolve => { finishRead = resolve; }); },
+  }));
+  const firstWaiting = once(runner, 'handoff'); const task = runner.process();
+  try {
+    await firstWaiting; await observing;
+    const secondWaiting = once(runner, 'handoff'); runner.continue('skip'); await secondWaiting;
+    finishRead(true); await sleep(30);
+    assert.match(runner.handoffMessage, /Second OTP/);
+    assert.equal(second.status, 'working');
+    assert.equal(reads, 1);
+    runner.continue('skip'); await task;
+    assert.deepEqual(run.projects.map(current => current.status), ['skipped', 'skipped']);
+  } finally { finishRead?.(true); await runner.stop(); await task; await close(); }
+});
+test('stop cancels a CAPTCHA handoff observer and ignores its late readiness answer', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun(config); run.projects = [item()];
+  let preparations = 0; let reads = 0; let finishRead!: (ready: boolean) => void; let readStarted!: () => void;
+  const observing = new Promise<void>(resolve => { readStarted = resolve; });
+  const runner = new Runner(run, store, fake({
+    prepare: async () => { preparations++; return {ready: false, reason: 'CAPTCHA', baseline: [], verification: true}; },
+    verificationReady: async () => { reads++; readStarted(); return new Promise<boolean>(resolve => { finishRead = resolve; }); },
+  }));
+  const task = runner.process();
+  try {
+    await observing; await runner.stop(); await task;
+    finishRead(true); await sleep(30);
+    assert.equal(preparations, 1);
+    assert.equal(reads, 1);
+    assert.equal(run.state, 'stopped');
+    assert.equal(run.projects[0].status, 'uncertain');
+    assert.equal(runner.handoffMessage, '');
+  } finally { finishRead?.(true); await runner.stop(); await task; await close(); }
+});
+test('CAPTCHA-specific discovery handoffs automatically continue after verification clears', {timeout: 5000}, async () => {
+  const {store, close} = await temporary();
+  const run = createRun({...config, limit: 1, sites: ['99acres']}); let reads = 0;
+  const driver = fake({
+    discover: async (_config, _site, _limit, _checkpoint, handoff) => {
+      assert.equal(await handoff('Discovery CAPTCHA', true), 'continue');
+      return [item()];
+    },
+    verificationReady: async () => { reads++; return true; },
+  });
+  const runner = new Runner(run, store, driver); const task = runner.discover();
+  try {
+    await task;
+    assert.equal(reads, 1);
+    assert.equal(run.projects.length, 1);
+    assert.equal(run.state, 'ready');
+  } finally { await runner.stop(); await task; await close(); }
 });
 test('pause prevents processing until resumed', async () => {
   const {store, close} = await temporary();

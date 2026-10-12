@@ -41,13 +41,46 @@ export class Runner extends EventEmitter {
     this.stopped = true; this.controller.abort(); this.handoffResolve?.('skip');
     await this.driver.close().catch(() => undefined);
   }
-  private handoff: Handoff = async message => {
+  private async observeVerification(resolve: (answer: 'continue' | 'skip') => void, signal: AbortSignal): Promise<void> {
+    const current = (): boolean => !signal.aborted && !this.stopped && this.handoffResolve === resolve;
+    try {
+      while (current()) {
+        await sleep(1000, undefined, {signal});
+        if (!current()) return;
+        await this.checkpoint();
+        if (!current()) return;
+        let ready = false;
+        // A verification iframe can disappear during this read-only observation.
+        // Recheck the live page on the next tick rather than failing the handoff.
+        try { ready = await this.driver.verificationReady!(); } catch { continue; }
+        if (!ready || !current()) continue;
+        await this.checkpoint();
+        if (!current()) return;
+        await this.record('CAPTCHA: verification cleared in Chrome; continuing on the current page.');
+        if (current()) resolve('continue');
+        return;
+      }
+    } catch (error) {
+      if (!signal.aborted && !this.stopped) throw error;
+    }
+  }
+  private handoff: Handoff = async (message, verification = false) => {
     await this.checkpoint();
     this.handoffMessage = message;
-    const waiting = new Promise<'continue' | 'skip'>(resolve => { this.handoffResolve = resolve; });
+    let resolveHandoff!: (answer: 'continue' | 'skip') => void;
+    const waiting = new Promise<'continue' | 'skip'>(resolve => { this.handoffResolve = resolveHandoff = resolve; });
+    const observation = new AbortController();
+    if (verification && this.driver.verificationReady) {
+      const signal = AbortSignal.any([this.controller.signal, observation.signal]);
+      void this.observeVerification(resolveHandoff, signal).catch(() => undefined);
+    }
     this.emit('change'); this.emit('handoff', message);
-    const result = await waiting;
-    this.handoffResolve = undefined; this.handoffMessage = '';
+    let result: 'continue' | 'skip';
+    try { result = await waiting; }
+    finally {
+      observation.abort();
+      if (this.handoffResolve === resolveHandoff) { this.handoffResolve = undefined; this.handoffMessage = ''; }
+    }
     await this.checkpoint();
     this.emit('change'); return result;
   };
@@ -112,7 +145,7 @@ export class Runner extends EventEmitter {
           await this.checkpoint();
           const baseline = preparation.baseline;
           while (!preparation.ready) {
-            const answer = await this.handoff(preparation.reason + ' Complete the form in Chrome; c rechecks, k skips.');
+            const answer = await this.handoff(preparation.reason + ' Complete the form in Chrome; c rechecks, k skips.', preparation.verification);
             if (answer === 'skip') { await this.mark(item, 'skipped', preparation.reason); break; }
             if (this.run.config.mode === 'submit' && await this.driver.confirmed(item, baseline)) { await this.mark(item, 'submitted', 'New portal confirmation observed after browser handoff.'); break; }
             preparation = await this.driver.prepare(item, this.run.config, false);
@@ -126,8 +159,12 @@ export class Runner extends EventEmitter {
             submitted = true;
             const clicked = await this.driver.submit(item);
             if (clicked && this.driver.verifyCaptcha) {
-              const verification = await this.driver.verifyCaptcha();
-              if (verification.pending) await this.handoff(verification.reason + ' Complete verification in Chrome; c checks confirmation, k leaves this uncertain.');
+              let verification = await this.driver.verifyCaptcha();
+              while (verification.pending) {
+                const answer = await this.handoff(verification.reason + ' Complete verification in Chrome; c checks confirmation, k leaves this uncertain.', true);
+                if (answer === 'skip') break;
+                verification = await this.driver.verifyCaptcha();
+              }
             }
             if (!clicked) {
               await this.handoff('Submit control not found. Submit in Chrome, then c checks confirmation; k leaves this uncertain.');

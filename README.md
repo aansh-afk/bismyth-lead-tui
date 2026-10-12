@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.10/bismyth-lead-tui-0.1.10.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.11/bismyth-lead-tui-0.1.11.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.10/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.11/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -134,6 +134,10 @@ Image capture uses one viewport crop without scrolling around individual tiles. 
 These guards limit incorrect or repetitive actions; they do not establish that Luna recognizes every street scene correctly. The prompt requires the exact requested object and asks for a handoff when uncertain, but a model can still return an incorrect valid tile list. Image freshness uses instructions, image URLs and crop metadata; pixel changes behind an unchanged image URL are not independently detected. Live provider acceptance remains unverified.
 
 Image detection supports Google's actual `#rc-imageselect` dialog ID and the earlier `.rc-imageselect` class variant. Verification fixtures include ID-only dialogs with actual 3×3/4×4 table-cell tiles; a visible image grid is not rejected merely because its container has no class.
+
+When Chrome completes verification, the app rechecks the current page and follows its enabled **Proceed** button. It supports portal callbacks without a response textarea and waits up to eight seconds for delayed enablement/navigation. A disappearing provider iframe is rechecked against the portal state. Frame disappearance or a checkbox tick alone never counts as clearance.
+
+CAPTCHA-specific browser handoffs observe clearance once per second and continue on the current page; **C** also rechecks immediately. OTPs, terms and other form handoffs still use C after you complete them. **K** skips the current property/site and opens the next one, which may trigger another verification. The app keeps an already selected search-results page instead of navigating to the same URL again. If Proceed fails to clear the gate, automatic retries stop there; C can explicitly recheck. A manually cleared gate can continue even after the image-attempt limit.
 
 A checkbox tick or a transcription never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Changed images/audio, invalid decisions and exhausted attempts produce a visible reason. Provider “Try again later” blocks are detected before solver calls: discovery preserves found properties and continues to other selected websites. The app does not repeatedly request an audio challenge when the provider has blocked it. OTPs and consent remain manual. Live 99acres provider-block clearance is not established.
 

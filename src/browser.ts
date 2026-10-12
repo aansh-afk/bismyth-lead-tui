@@ -4,10 +4,10 @@ import {access, mkdir} from 'node:fs/promises';
 import {join} from 'node:path';
 import {adapters, loadAdapters} from './adapters.js';
 import type {Adapter} from './adapters.js';
-import {project, siteForUrl} from './model.js';
+import {canonicalUrl, project, siteForUrl} from './model.js';
 import type {Config, Project, Site} from './model.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
-import {attemptCaptcha, blockedCaptcha, captchaBlocked, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
+import {attemptCaptcha, blockedCaptcha, captchaBlocked, captchaCanContinue, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
 import type {AudioSolver} from './audio-captcha.js';
 import type {CaptchaActivity, CaptchaResult, GridSolver} from './captcha.js';
 import {discoverPublicListings} from './listing-api.js';
@@ -69,14 +69,15 @@ export function publicListingContext(options: {site: Site; intent: Config['inten
   return {site: 'nobroker', endpoint: 'https://www.nobroker.in/api/v3/multi/property/BUY/filter', params, page: Number(params.pageNo || 1)};
 }
 
-export type Handoff = (message: string) => Promise<'continue' | 'skip'>;
-export interface Prepared {ready: boolean; reason: string; baseline: string[]}
+export type Handoff = (message: string, verification?: boolean) => Promise<'continue' | 'skip'>;
+export interface Prepared {ready: boolean; reason: string; baseline: string[]; verification?: boolean}
 export interface Driver {
   discover(config: Config, site: Site, limit: number, checkpoint: () => Promise<void>, handoff: Handoff): Promise<Project[]>;
   prepare(item: Project, config: Config, navigate?: boolean): Promise<Prepared>;
   submit(item: Project): Promise<boolean>;
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
   verifyCaptcha?(): Promise<CaptchaResult>;
+  verificationReady?(): Promise<boolean>;
   takeDiscoveryNotes?(): string[];
   setActivity?(activity: CaptchaActivity): void;
   setCheckpoint?(checkpoint: () => Promise<void>): void;
@@ -126,10 +127,19 @@ export class PortalBrowser implements Driver {
     if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
     if (await captchaBlocked(page)) { await this.activity('CAPTCHA: ' + blockedCaptcha.reason); return blockedCaptcha; }
     const attempts = this.captchaFailure?.url === page.url() ? this.captchaFailure.attempts : 0;
-    if (attempts >= 2 && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
+    if (attempts >= 2 && !await captchaCanContinue(page) && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
     const result = await attemptCaptcha(page, this.decisionController.signal, this.solveCaptcha, this.solveAudio, this.activity, {}, this.checkpoint);
     this.captchaFailure = result.pending ? {url: page.url(), result, attempts: attempts + 1} : undefined;
     return result;
+  }
+  async verificationReady(): Promise<boolean> {
+    const page = this.page;
+    if (!page || page.isClosed()) return false;
+    // A visible enabled Proceed is enough to try once, but it is not evidence
+    // of progress after that click timed out. Leave this gate for an explicit
+    // C recheck until Chrome actually leaves it or finishes verification.
+    if (this.captchaFailure?.url === page.url() && this.captchaFailure.result.continuationFailed && await captchaPending(page)) return false;
+    return captchaCanContinue(page);
   }
   private async settle(): Promise<void> {
     await this.page!.waitForLoadState('domcontentloaded').catch(() => undefined);
@@ -209,7 +219,7 @@ export class PortalBrowser implements Driver {
       let homeChallenge = await this.verifyCaptcha();
       while (homeChallenge.pending) {
         if (homeChallenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
-        if (await handoff(`${site}: ${homeChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
+        if (await handoff(`${site}: ${homeChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`, true) === 'skip') return [...result.values()].slice(0, limit);
         homeChallenge = await this.verifyCaptcha();
       }
       const city = config.city.toLowerCase();
@@ -242,11 +252,11 @@ export class PortalBrowser implements Driver {
     for (const seed of searchSeeds) {
       await checkpoint();
       if (result.size >= limit) break;
-      await this.navigate(seed);
+      if (!/^https?:\/\//.test(page.url()) || canonicalUrl(page.url()) !== canonicalUrl(seed)) await this.navigate(seed);
       let challenge = await this.verifyCaptcha();
       while (challenge.pending) {
         if (challenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
-        const answer = await handoff(`${site}: ${challenge.reason} Complete verification in Chrome; C rechecks, K skips.`);
+        const answer = await handoff(`${site}: ${challenge.reason} Complete verification in Chrome; C rechecks, K skips.`, true);
         if (answer === 'skip') return [...result.values()].slice(0, limit);
         challenge = await this.verifyCaptcha();
       }
@@ -277,7 +287,7 @@ export class PortalBrowser implements Driver {
         let scrollChallenge = await this.verifyCaptcha();
         while (scrollChallenge.pending) {
           if (scrollChallenge.blocked) { this.discoveryNotes.push(`${site}: provider blocked discovery; kept ${result.size} properties and continued with other websites.`); return [...result.values()].slice(0, limit); }
-          if (await handoff(`${site}: ${scrollChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`) === 'skip') return [...result.values()].slice(0, limit);
+          if (await handoff(`${site}: ${scrollChallenge.reason} Complete verification in Chrome; C rechecks, K skips.`, true) === 'skip') return [...result.values()].slice(0, limit);
           scrollChallenge = await this.verifyCaptcha();
         }
         const previous = result.size;
@@ -314,7 +324,7 @@ export class PortalBrowser implements Driver {
     const definition = this.definitions[item.site];
     if (navigate) await this.navigate(item.url);
     const gate = await this.verifyCaptcha();
-    if (gate.pending) return {ready: false, reason: gate.reason, baseline: []};
+    if (gate.pending) return {ready: false, reason: gate.reason, baseline: [], verification: true};
     const baseline = await this.evidence(item);
     // Check existing forms before opening a modal; avoid closing an already open form.
     let phone = false;
@@ -324,7 +334,7 @@ export class PortalBrowser implements Driver {
       if (!opened) await this.clickLabels(definition.openLabels, definition.openSelector);
     }
     const formChallenge = await this.verifyCaptcha();
-    if (formChallenge.pending) return {ready: false, reason: formChallenge.reason, baseline};
+    if (formChallenge.pending) return {ready: false, reason: formChallenge.reason, baseline, verification: true};
     await page.locator(definition.fields.phone.join(',')).filter({visible: true}).first().waitFor({state: 'visible', timeout: 4000}).catch(() => undefined);
     const missing: string[] = [];
     const values: Record<string, string> = {name: config.name, email: config.email, phone: config.phone, ...config.extraFields};
@@ -347,7 +357,7 @@ export class PortalBrowser implements Driver {
       if (!filled && key !== 'email') missing.push(key);
     }
     const finalChallenge = await this.verifyCaptcha();
-    if (finalChallenge.pending) return {ready: false, reason: finalChallenge.reason, baseline};
+    if (finalChallenge.pending) return {ready: false, reason: finalChallenge.reason, baseline, verification: true};
     const blocked = await page.evaluate(() => {
       const body = document.body.innerText;
       if (/verify (?:your )?(?:phone|mobile)|enter (?:the )?otp|one.time (?:password|code)|verify you are human|access denied/i.test(body)) return 'Verification or login needs your attention.';
