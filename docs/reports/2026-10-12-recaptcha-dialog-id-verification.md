@@ -26,7 +26,7 @@ The corrected full suite with real subscription vision enabled passed **111 test
 
 The built tarball contains **26 entries**, is **66,596 bytes**, and has SHA-256 `4225ec8d8ffa54edec9ef70e61768497f47715e05f40e7d74c34f2cee96a888c`. A clean npm prefix installed version 0.1.9 with scripts disabled. Its runtime contains the corrected ID/class selector and image-only browser default. Doctor reported Chrome, saved ChatGPT login, Luna Low and automatic audio disabled against isolated app data. `git diff --check` passed.
 
-Published source commit `49484b5` and [release v0.1.9](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.9). GitHub's asset digest matches the tested tarball. The public source-pinned installer upgraded the user's `~/.local` installation to 0.1.9. The installed runtime contains the Google dialog ID selector and still has no default audio solver. The personal-profile SHA-256 is unchanged. The tagged installer is available and byte-identical to the script used for the upgrade. The existing TUI was left running and must quit/relaunch to load the corrected detector.
+Published source commit `49484b5` and [release v0.1.9](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.9). GitHub's asset digest matches the tested tarball. The public source-pinned installer upgraded the user's `~/.local` installation to 0.1.9. The installed runtime contains the Google dialog ID selector and still has no default audio solver. The personal-profile SHA-256 is unchanged. The tagged installer is available and byte-identical to the script used for the upgrade. No TUI process was active at the final check; launch `bismyth-leads` to load the corrected detector.
 
 ## Limits
 
