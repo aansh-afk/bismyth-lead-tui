@@ -6,12 +6,14 @@ import {counts} from './model.js';
 import {Store} from './store.js';
 import {TerminalApp} from './tui.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
+import {doctorFix} from './doctor.js';
 
 const help = `Bismyth property enquiry TUI
 
 Usage:
   bismyth-leads                       Interactive terminal app
   bismyth-leads doctor                Check runtime, Chrome and ChatGPT login
+  bismyth-leads doctor-fix            Repair Codex and Chromium where possible
   bismyth-leads check-subscription    Verify ChatGPT login with a real decision
   bismyth-leads history               List saved runs
   bismyth-leads export ID csv|json     Export a saved run
@@ -44,12 +46,23 @@ async function main(): Promise<void> {
   const [command, id, format] = process.argv.slice(2);
   if (command === '--help' || command === 'help') { console.log(help); return; }
   const store = new Store(); await store.init();
-  if (command === 'doctor') {
+  const doctor = async (): Promise<void> => {
     const config = await store.config();
     console.log('Node:', process.version); console.log('Data:', store.directory);
-    console.log('Chrome:', await browserPath(config.browserPath));
-    console.log('AI:', await subscriptionStatus());
+    try { console.log('Chrome:', await browserPath(config.browserPath)); } catch (error) { console.log('Chrome: missing (' + (error as Error).message + ')'); }
+    try { console.log('AI:', await subscriptionStatus()); } catch (error) { console.log('AI: unavailable (' + (error as Error).message + ')'); }
     console.log('Saved runs:', (await store.history()).length); return;
+  };
+  if (command === 'doctor') {
+    await doctor(); return;
+  }
+  if (command === 'doctor-fix') {
+    const config = await store.config();
+    console.log('Preparing local Bismyth data…');
+    const repaired = await doctorFix({findBrowser: () => browserPath(config.browserPath)});
+    for (const action of repaired.actions) console.log(action);
+    if (repaired.browser) console.log('Chrome ready:', repaired.browser);
+    console.log(''); await doctor(); return;
   }
   if (command === 'check-subscription') {
     console.log(await subscriptionStatus());

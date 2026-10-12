@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.0/bismyth-lead-tui-0.1.0.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.1/bismyth-lead-tui-0.1.1.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.0/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.1/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -31,8 +31,11 @@ bismyth-leads doctor
 
 Each machine uses its own Codex login. The installer does not copy credentials, install a browser or change your shell.
 
+`bismyth-leads doctor-fix` creates local app storage and, when missing, installs Codex and Chromium on supported Linux package-manager hosts. It asks for `sudo` only for Chromium installation. ChatGPT login, CAPTCHA and OTP verification remain interactive steps; the command prints the exact next action when one is needed.
+
 ```bash
 bismyth-leads --help
+bismyth-leads doctor-fix
 bismyth-leads history
 bismyth-leads export RUN_ID csv
 bismyth-leads check-subscription
@@ -82,6 +85,7 @@ The browser's AI decisions now use **Codex CLI with your saved ChatGPT login**. 
 ```bash
 codex login                         # choose Sign in with ChatGPT
 bismyth-leads doctor                 # checks Chrome and ChatGPT login
+bismyth-leads doctor-fix             # installs Codex/Chromium where possible
 bismyth-leads check-subscription     # makes one real, small decision
 ```
 

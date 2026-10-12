@@ -33,6 +33,7 @@ The active AI browser path uses Codex CLI and saved ChatGPT login. Laya is no lo
 | 100-item browser fixture | 100 forms prepared in preview mode; zero final submissions |
 | 200-item browser fixture | 200 confirmed submissions; submitted contact values verified; saved-run resume produced zero duplicates |
 | 300-item browser fixture | 300/300 confirmed submissions; submitted contact values verified; saved-run resume produced zero duplicates; 236,791 ms processing time |
+| `doctor-fix` repair planner | Passed mocked missing-Codex/missing-Chromium flow; global Codex install, Linux Chromium package command, browser recheck and ChatGPT-login handoff verified |
 
 Visual evidence: [setup](2026-10-12-tui-setup.png), [review dialog](2026-10-12-tui-review.png).
 

@@ -1,6 +1,6 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Interactive property enquiry CLI with Playwright and ChatGPT-backed Codex decisions",
   "license": "MIT",
   "repository": {"type": "git", "url": "git+https://github.com/aansh-afk/bismyth-lead-tui.git"},

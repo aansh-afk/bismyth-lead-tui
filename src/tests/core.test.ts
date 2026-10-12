@@ -15,6 +15,7 @@ import {clean} from '../tui.js';
 import {renderView} from '../terminal-view.js';
 import {subscriptionEnvironment} from '../subscription.js';
 import {indiaStates, citiesForState, validLocation} from '../locations.js';
+import {doctorFix} from '../doctor.js';
 
 const config: Config = {...defaults, city: 'Pune', name: 'Fixture User', email: 'fixture@example.test', phone: '+91 9000000000', delayMs: 0};
 const item = (): Project => project('99acres', 'Fixture project', 'https://www.99acres.com/fixture-npxid-1');
@@ -164,6 +165,24 @@ test('India-only state/city data and validation reject mismatches and typos', ()
   assert.equal(validLocation('US', 'New York'), false);
   assert.equal(validLocation('', 'London'), false);
   assert.equal(validLocation('', 'Mumbai'), true);
+});
+test('doctor-fix installs only missing prerequisites and leaves ChatGPT sign-in to the user', async () => {
+  const calls: string[] = []; let chromium = false; let codex = false; const messages: string[] = [];
+  const command = (name: string, args: string[]) => {
+    calls.push(name + ' ' + args.join(' '));
+    if (name === 'codex' && args[0] === '--version') return {status: codex ? 0 : 1};
+    if (name === 'codex') return {status: 1};
+    if (name === 'npm') { codex = true; return {status: 0}; }
+    if (name === 'apt-get' && args[0] === '--version') return {status: 0};
+    if (name === 'sudo') { chromium = true; return {status: 0}; }
+    return {status: 1};
+  };
+  const result = await doctorFix({platform: 'linux', command, findBrowser: async () => { if (!chromium) throw new Error('missing'); return '/usr/bin/chromium'; }, log: message => messages.push(message)});
+  assert.deepEqual(result.actions, ['Installed Codex CLI.', 'Installed Chromium.']);
+  assert.equal(result.browser, '/usr/bin/chromium');
+  assert.ok(calls.includes('npm install --global @openai/codex'));
+  assert.ok(calls.includes('sudo apt-get install -y chromium'));
+  assert.ok(messages.some(message => message.includes('ChatGPT sign-in')));
 });
 test('discovery fills spare capacity from a portal when other portals are exhausted', async () => {
   const {store, close} = await temporary();
