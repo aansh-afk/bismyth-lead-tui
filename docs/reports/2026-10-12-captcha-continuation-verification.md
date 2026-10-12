@@ -22,7 +22,9 @@ Initial new browser continuation suite: 10 tests passed, zero failures/skips, 11
 
 Core continuation checks initially passed 32 tests in 17.259 seconds; two added disabled-readiness/post-submit-OTP safety cases passed separately in 8.598 seconds. Final full suite: **148 tests passed, zero failures/skips, 119.310 seconds**. Compilation and independent read-only review passed, with no essential release blocker identified.
 
-The tarball contains **26 entries, 70,741 bytes**, SHA-256 `7e2c95faa95dbabaa9a3b93484b80539d1710d88839dacec3fd1204416f9ba18`. A clean npm prefix installed the artifact with lifecycle scripts disabled. Doctor confirmed Chrome, saved ChatGPT login, Luna Low and automatic audio disabled using isolated test data. `git diff --check` passed. Publication and user-install readback follow after release.
+The tarball contains **26 entries, 70,741 bytes**, SHA-256 `7e2c95faa95dbabaa9a3b93484b80539d1710d88839dacec3fd1204416f9ba18`. A clean npm prefix installed the artifact with lifecycle scripts disabled. Doctor confirmed Chrome, saved ChatGPT login, Luna Low and automatic audio disabled using isolated test data. `git diff --check` passed.
+
+Published source commit `1ec8e9d` and [release v0.1.11](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.11). GitHub's asset digest matches the tested tarball. The public tagged installer matched source and installed **0.1.11** under the user's `~/.local`. Installed CAPTCHA, browser and Runner runtime files exactly match the release. Doctor confirmed Chrome, saved ChatGPT login and unchanged image/audio configuration; eleven saved runs remain present. The contact-profile hash exactly matches the pre-install value. Native TUI PID 1094961 remained running, so installation did not close that browser session. Q/relaunch is required to load the updated modules.
 
 ## Limits
 
