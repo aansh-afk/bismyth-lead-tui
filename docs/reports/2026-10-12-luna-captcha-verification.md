@@ -23,6 +23,10 @@ The first package build in the standalone release checkout failed because that c
 
 The built npm tarball contains **26 entries** and is **65,044 bytes**. SHA-256: `55364153d474c7867e08d795f68097fb98107d1f7f1e78a87acdc8f61139c149`. A clean npm prefix installed version 0.1.6 with scripts disabled. The installed runtime contains the Luna Low arguments and the Python audio helper. Its doctor command, using isolated app data and the previously prepared private audio environment, reported Chrome, saved ChatGPT login and ready audio. `git diff --check` passed.
 
+Published source commit `3730435` and [release v0.1.6](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.6). GitHub's asset digest matches the local tarball. Release creation initially rejected an abbreviated target commit ID; using the full ID succeeded. The new tagged raw installer initially returned 404, then became available with bytes identical to the tested script. An unused direct curl package-download probe stalled and was stopped; the npm installer successfully fetched the release asset.
+
+The tagged public installer installed version 0.1.6 into a fresh prefix. Its doctor command reported Chrome, ChatGPT login and ready audio against isolated data with the prepared private interpreter. The same published installer from the exact source commit upgraded the user's existing `~/.local` installation to 0.1.6. That installed runtime contains Luna Low arguments, and its doctor command reported Chrome, ChatGPT login, ready audio and five preserved saved runs. The personal-profile SHA-256 and global Codex configuration SHA-256 remained unchanged after the upgrade. The cleared current run remained absent.
+
 ## Limits
 
 A synthetic challenge proves the configured Luna Low image route and fixture integration, not real 99acres acceptance or a CAPTCHA success rate. A provider “Try again later” block offers no challenge to solve. Existing block detection and partial discovery fallback remain in effect. Audio acceptance and other live portal behaviour are not newly established by this update. Subscription usage and model access depend on the signed-in account.
