@@ -41,7 +41,7 @@ export async function subscriptionJSON(prompt: string, schema: object, signal?: 
       const child = spawn('codex', ['exec', '--ignore-user-config', '--ignore-rules', '--ephemeral', '--skip-git-repo-check', '--sandbox', 'read-only', '-c', 'forced_login_method="chatgpt"', '-c', 'approval_policy="never"', '--color', 'never', '--output-schema', schemaPath, '--output-last-message', outputPath, ...(image ? ['--model', 'gpt-6-luna', '-c', 'model_reasoning_effort="low"', '--image', imagePath] : []), '-'], {cwd: directory, env: subscriptionEnvironment(), stdio: ['pipe', 'ignore', 'pipe'], signal});
       // CLI diagnostics can contain account details. Never forward them into the TUI.
       child.stderr.resume(); child.stdin.on('error', () => undefined); child.stdin.end(prompt);
-      const timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error('Subscription decision timed out. Try again or complete this step in Chrome.')); }, 90000);
+      const timeout = setTimeout(() => { child.kill('SIGTERM'); reject(new Error(image ? 'Luna image decision timed out after 180 seconds. Enter retries the image challenge.' : 'Subscription decision timed out. Try again or complete this step in Chrome.')); }, image ? 180000 : 90000);
       child.on('error', () => { clearTimeout(timeout); reject(new Error('Unable to start Codex. Check your ChatGPT login.')); });
       child.on('close', code => { clearTimeout(timeout); if (code === 0) resolve(); else reject(new Error('Codex decision failed. Check subscription access or usage limits.')); });
     });

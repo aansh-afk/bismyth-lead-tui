@@ -28,18 +28,31 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
     if (path.startsWith('/widget/')) {
       if (mode === 'empty') return void response.end('<h1>Widget loading</h1>');
       if (mode === 'blocked') return void response.end('<div class="rc-doscaptcha-body"><h2>Try again later</h2><div class="rc-doscaptcha-body-text">Your computer or network may be sending automated queries. To protect our users, we cannot process your request right now.</div></div>');
-      if (mode === 'delayed-panel' || mode === 'delayed-tiles' || mode === 'delayed-images') return void response.end(`<html><body>
+      if (mode === 'delayed-panel' || mode === 'delayed-tiles' || mode === 'delayed-images' || mode === 'slow-panel' || mode === 'missing-grid') return void response.end(`<html><body>
         <div id="recaptcha-anchor" role="checkbox" aria-checked="true">I'm not a robot</div>
-        <div class="rc-imageselect" ${mode === 'delayed-panel' ? 'hidden' : ''}><h2>Select all red squares</h2><div id="grid" style="display:grid;grid-template-columns:repeat(3,80px)"></div></div>
+        <div class="rc-imageselect" ${mode === 'delayed-panel' || mode === 'slow-panel' ? 'hidden' : ''}><h2>Select all red squares</h2><div id="grid" style="display:grid;grid-template-columns:repeat(3,80px)"></div></div>
         <button id="recaptcha-audio-button" onclick="parent.postMessage('audio-click','*');document.querySelector('.rc-imageselect').hidden=true;document.querySelector('.rc-doscaptcha-body-text').hidden=false">Get an audio challenge</button>
+        <button id="recaptcha-reload-button" onclick="parent.postMessage('reload-click','*');document.querySelector('.rc-doscaptcha-body-text').hidden=false">Get another challenge</button>
         <div class="rc-doscaptcha-body-text" hidden>Your computer or network may be sending automated queries. Try again later.</div>
         <button id="recaptcha-verify-button" onclick="if(document.querySelectorAll('[aria-pressed=true]').length===1 && document.querySelector('.rc-imageselect-tile').getAttribute('aria-pressed')==='true'){parent.postMessage('accepted','*');document.querySelector('.rc-imageselect').hidden=true}">Verify</button>
         <script>
           const tileImage=${JSON.stringify(mode === 'delayed-images' ? '<img src="/slow-image.png" width="20" height="20">' : '')};
           const tiles=Array.from({length:9},(_,index)=>'<button class="rc-imageselect-tile" aria-pressed="false" onclick="this.setAttribute(\\'aria-pressed\\',\\'true\\')" style="width:80px;height:80px;background:red">'+(index+1)+tileImage+'</button>').join('');
-          ${mode !== 'delayed-tiles' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}
-          setTimeout(()=>{document.querySelector('.rc-imageselect').hidden=false;${mode === 'delayed-tiles' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}},600);
+          ${mode !== 'delayed-tiles' && mode !== 'missing-grid' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}
+          setTimeout(()=>{document.querySelector('.rc-imageselect').hidden=false;${mode === 'delayed-tiles' ? "document.querySelector('#grid').innerHTML=tiles;" : ''}},${mode === 'slow-panel' ? 9000 : 600});
         </script>
+      </body></html>`);
+      if (mode === 'image-return' || mode === 'image-return-disabled') return void response.end(`<html><body>
+        <div id="recaptcha-anchor" role="checkbox" aria-checked="true">I'm not a robot</div>
+        <div class="rc-audiochallenge"><h2>Enter what you hear</h2><input id="audio-response"></div>
+        <div class="rc-imageselect" hidden><h2>Select all red squares</h2><div style="display:grid;grid-template-columns:repeat(3,80px)">
+          ${Array.from({length: 9}, (_, index) => `<button class="rc-imageselect-tile" aria-pressed="false" onclick="this.setAttribute('aria-pressed','true')" style="width:80px;height:80px;background:red">${index + 1}</button>`).join('')}
+        </div></div>
+        <button id="recaptcha-image-button" ${mode === 'image-return-disabled' ? 'disabled' : ''} onclick="parent.postMessage('image-click','*');document.querySelector('.rc-audiochallenge').hidden=true;document.querySelector('.rc-imageselect').hidden=false;this.hidden=true">Get an image challenge</button>
+        <button id="recaptcha-audio-button" onclick="parent.postMessage('audio-click','*');document.querySelector('.rc-doscaptcha-body-text').hidden=false">Get an audio challenge</button>
+        <button id="recaptcha-reload-button" onclick="parent.postMessage('reload-click','*');document.querySelector('.rc-doscaptcha-body-text').hidden=false">Get another challenge</button>
+        <div class="rc-doscaptcha-body-text" hidden>Your computer or network may be sending automated queries. Try again later.</div>
+        <button id="recaptcha-verify-button" onclick="if(document.querySelectorAll('[aria-pressed=true]').length===1 && document.querySelector('.rc-imageselect-tile').getAttribute('aria-pressed')==='true'){parent.postMessage('accepted','*');document.querySelector('.rc-imageselect').hidden=true}">Verify</button>
       </body></html>`);
       const existing = mode === 'existing';
       response.end(`<html><body>
@@ -47,7 +60,7 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
         ${existing ? '' : `<div class="rc-imageselect"><h2>Select all red squares</h2><div style="display:grid;grid-template-columns:repeat(3,80px)">
           ${Array.from({length: 9}, (_, index) => `<button class="rc-imageselect-tile" style="width:80px;height:80px;background:red">${index + 1}</button>`).join('')}
         </div></div>`}
-        <button id="recaptcha-audio-button" ${existing ? 'hidden' : ''} onclick="document.querySelector('.rc-imageselect').hidden=true; document.querySelector('.rc-audiochallenge').hidden=false; this.hidden=true">Get an audio challenge</button>
+        <button id="recaptcha-audio-button" ${existing ? 'hidden' : ''} onclick="parent.postMessage('audio-click','*'); document.querySelector('.rc-imageselect').hidden=true; document.querySelector('.rc-audiochallenge').hidden=false; this.hidden=true">Get an audio challenge</button>
         <div class="rc-audiochallenge" ${existing ? '' : 'hidden'}><h2>Enter what you hear</h2><audio id="audio-source" hidden src="${audioUrl}"></audio><a class="rc-audiochallenge-tdownload-link" href="${audioUrl}">Download audio</a>
           <input id="audio-response"><div class="rc-audiochallenge-error-message" hidden>Multiple correct solutions required - please solve more.</div>
         </div>
@@ -60,7 +73,7 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
       response.end(`<html><body><h1>Complete the CAPTCHA</h1>
         <iframe title="reCAPTCHA" src="http://localhost:${address.port}/widget/${mode}" style="width:420px;height:500px"></iframe>
         <textarea name="g-recaptcha-response" hidden></textarea><button disabled onclick="location.href='/done'">Proceed</button>
-        <script>sessionStorage.setItem('audioClicks','0');addEventListener('message',event=>{if(event.data==='audio-click')sessionStorage.setItem('audioClicks',String(Number(sessionStorage.getItem('audioClicks'))+1));if(event.data==='accepted'){document.querySelector('textarea').value='fixture-provider-token';${mode === 'disabled' ? '' : "document.querySelector('button').disabled=false"}}})</script>
+        <script>for(const kind of ['audio','image','reload'])sessionStorage.setItem(kind+'Clicks','0');addEventListener('message',event=>{for(const kind of ['audio','image','reload'])if(event.data===kind+'-click')sessionStorage.setItem(kind+'Clicks',String(Number(sessionStorage.getItem(kind+'Clicks'))+1));if(event.data==='accepted'){document.querySelector('textarea').value='fixture-provider-token';${mode === 'disabled' ? '' : "document.querySelector('button').disabled=false"}}})</script>
       </body></html>`);
     }
   });
@@ -101,6 +114,59 @@ test('real Chromium audio fallback verifies fresh responses and detects provider
         assert.equal(new URL(page.url()).pathname, '/done'); assert.equal(await captchaPending(page), false);
       });
     }
+    await context.test('the default image-only flow waits beyond eight seconds without clicking the audio offer', {timeout: 25000}, async () => {
+      await page.goto(base + '/captcha/slow-panel'); let gridCalls = 0;
+      assert.equal(await widget().locator('.rc-imageselect').isVisible(), false);
+      const started = performance.now();
+      const result = await attemptCaptcha(page, new AbortController().signal, async (image, count, _signal, selected) => {
+        gridCalls++; assert.ok(image.byteLength > 0); assert.equal(count, 9);
+        assert.deepEqual(selected, gridCalls === 1 ? [] : [1]);
+        return gridCalls === 1 ? {action: 'select', tiles: [1]} : {action: 'verify', tiles: []};
+      });
+      assert.equal(result.pending, false, result.reason); assert.equal(gridCalls, 2);
+      assert.ok(performance.now() - started > 8000);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('audioClicks'))), 0);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('reloadClicks'))), 0);
+      assert.equal(new URL(page.url()).pathname, '/done');
+    });
+    for (const failure of ['manual', 'model-error', 'missing-grid']) {
+      await context.test(`the default ${failure} handoff does not click audio or reload`, async () => {
+        await page.goto(base + '/captcha/' + (failure === 'missing-grid' ? 'missing-grid' : 'switch')); let gridCalls = 0;
+        const activity: string[] = [];
+        const result = await attemptCaptcha(page, new AbortController().signal, async () => {
+          gridCalls++;
+          if (failure === 'model-error') throw new Error('Synthetic image model unavailable');
+          return {action: 'manual', tiles: []};
+        }, undefined, async message => { activity.push(message); }, {imageLoadMs: 100});
+        assert.equal(result.pending, true); assert.equal(gridCalls, failure === 'missing-grid' ? 0 : 1);
+        assert.match(result.reason, failure === 'model-error' ? /Synthetic image model unavailable/ : failure === 'missing-grid' ? /wait expired.*0 visible tiles/ : /uncertain|invalid/);
+        assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('audioClicks'))), 0);
+        assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('reloadClicks'))), 0);
+        assert.ok(!activity.some(message => /switching.*audio|speech recognition/i.test(message)));
+      });
+    }
+    await context.test('an already open audio panel returns to the offered image challenge once without audio or reload', async () => {
+      await page.goto(base + '/captcha/image-return'); let gridCalls = 0;
+      assert.equal(await widget().locator('#audio-response').isVisible(), true);
+      const result = await attemptCaptcha(page, new AbortController().signal, async (_image, count, _signal, selected) => {
+        gridCalls++; assert.equal(count, 9); assert.deepEqual(selected, gridCalls === 1 ? [] : [1]);
+        return gridCalls === 1 ? {action: 'select', tiles: [1]} : {action: 'verify', tiles: []};
+      });
+      assert.equal(result.pending, false, result.reason); assert.equal(gridCalls, 2);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('imageClicks'))), 1);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('audioClicks'))), 0);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('reloadClicks'))), 0);
+      assert.equal(new URL(page.url()).pathname, '/done');
+    });
+    await context.test('a disabled image return control leaves the audio panel untouched', async () => {
+      await page.goto(base + '/captcha/image-return-disabled'); let gridCalls = 0;
+      const result = await attemptCaptcha(page, new AbortController().signal, async () => { gridCalls++; return {action: 'manual', tiles: []}; }, undefined, undefined, {imageLoadMs: 100});
+      assert.equal(result.pending, true); assert.equal(gridCalls, 0);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('imageClicks'))), 0);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('audioClicks'))), 0);
+      assert.equal(await page.evaluate(() => Number(sessionStorage.getItem('reloadClicks'))), 0);
+      assert.equal(await widget().locator('#audio-response').isVisible(), true);
+    });
     await context.test('an offered audio challenge is transcribed and checked by both provider and portal', async () => {
       await page.goto(base + '/captcha/switch'); let gridCalls = 0; let audioCalls = 0;
       const result = await attemptCaptcha(page, new AbortController().signal, async () => {

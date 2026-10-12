@@ -8,7 +8,6 @@ import {project, siteForUrl} from './model.js';
 import type {Config, Project, Site} from './model.js';
 import {chooseWithSubscription, subscriptionStatus} from './subscription.js';
 import {attemptCaptcha, blockedCaptcha, captchaBlocked, captchaPending, solveGridWithSubscription, tokenPresent} from './captcha.js';
-import {solveAudioWithGoogle} from './audio-captcha.js';
 import type {AudioSolver} from './audio-captcha.js';
 import type {CaptchaActivity, CaptchaResult, GridSolver} from './captcha.js';
 import {discoverPublicListings} from './listing-api.js';
@@ -96,7 +95,7 @@ export class PortalBrowser implements Driver {
   private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
   private activity: CaptchaActivity = async () => undefined;
-  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio: AudioSolver = (url, signal) => solveAudioWithGoogle(url, signal, this.dataDirectory)) {}
+  constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio?: AudioSolver) {}
   takeDiscoveryNotes(): string[] { return this.discoveryNotes.splice(0); }
   setActivity(activity: CaptchaActivity): void { this.activity = activity; }
   async start(config: Config): Promise<Page> {

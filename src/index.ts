@@ -54,7 +54,8 @@ async function main(): Promise<void> {
     try { console.log('Chrome:', await browserPath(config.browserPath)); } catch (error) { console.log('Chrome: missing (' + (error as Error).message + ')'); }
     try { console.log('AI:', await subscriptionStatus()); } catch (error) { console.log('AI: unavailable (' + (error as Error).message + ')'); }
     const audio = audioPrerequisites(store.directory);
-    console.log('Audio:', audio.missing.length ? 'missing ' + audio.missing.join(', ') + ' — run bismyth-leads doctor-fix' : 'ready (Google speech recognition)');
+    console.log('CAPTCHA: GPT-6 Luna Low; automatic audio disabled');
+    console.log('Optional audio helper:', audio.missing.length ? 'missing ' + audio.missing.join(', ') : 'ready (unused by the app)');
     console.log('Saved runs:', (await store.history()).length); return;
   };
   if (command === 'doctor') {

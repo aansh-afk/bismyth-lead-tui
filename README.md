@@ -9,14 +9,14 @@ Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with Cha
 Install the ready-built release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.7/bismyth-lead-tui-0.1.7.tgz
+npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.8/bismyth-lead-tui-0.1.8.tgz
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.7/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.8/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -103,7 +103,7 @@ Each model invocation uses `codex exec`, saved CLI auth, structured JSON output,
 
 Contact-control requests contain control labels and the task, without the contact values. CAPTCHA requests attach only the challenge panel screenshot plus the grid dimensions and already-selected tile IDs. Temporary screenshots have private permissions and are removed when the request finishes. Contact entry-point choices are bounded to the IDs observed on the page. Final enquiry submit controls are excluded from model selection. Actual decisions consume your Codex account's usage allowance; access is subject to that account's limits.
 
-Image CAPTCHA decisions explicitly select **GPT-6 Luna with low reasoning** (`--model gpt-6-luna -c 'model_reasoning_effort="low"'`). Contact-control decisions keep the CLI's default model. Your account must have access to Luna; a model-access error retains the browser handoff. [GPT-6 Luna supports image input and low reasoning, but no audio input](https://developers.openai.com/api/docs/models/gpt-6-luna), so offered audio challenges continue through the separate Google speech-recognition helper.
+Image CAPTCHA decisions explicitly select **GPT-6 Luna with low reasoning** (`--model gpt-6-luna -c 'model_reasoning_effort="low"'`). Image requests allow 180 seconds for a response; contact-control decisions keep the CLI's default model and 90-second deadline. Your account must have access to Luna; a model-access error retains the browser handoff. [GPT-6 Luna supports image input and low reasoning, but no audio input](https://developers.openai.com/api/docs/models/gpt-6-luna). Automatic audio solving is disabled.
 
 Verified on this machine: Codex CLI 0.160.1 reports ChatGPT login, and `check-subscription` completed a real contact-control decision. This establishes the configured subscription authentication route; it does not establish unlimited quota or your exact plan tier.
 
@@ -125,13 +125,13 @@ The meeting target is 100–300 projects per run. Discovery can return fewer pro
 
 ## Automatic CAPTCHA attempts
 
-During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. When an audio challenge is already visible or the provider offers an audio button, it can transcribe that challenge using Google speech recognition. Each automatic cycle has a two-minute budget, at most four image decisions and two audio answers. Enter permits a second cycle on the same page for late-loading or transient challenges; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
+During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. Playwright applies its validated tile selections and Verify decisions. Each automatic cycle has a ten-minute budget and at most twelve image decisions; each image-loading wait allows thirty seconds and each Luna request allows three minutes. These are upper limits, not compulsory delays. Enter permits a second cycle on the same page; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
 
-Image grids take priority over an offered audio button. The app waits up to eight seconds for all 9/16 tiles and their images to load before falling back to offered audio; an already open audio answer field is handled immediately. An image-solver failure can also use audio fallback. Activity explicitly reports **GPT-6 Luna · low reasoning**, tile selection, image Verify and any switch to audio. Quit and relaunch after upgrading so an already running process loads the new solver.
+The app never clicks an offered audio button, downloads audio or invokes speech recognition during normal runs. If audio mode is already open, it uses an observed enabled image-mode button once to return to images. Without that button it reports the missing image mode. Missing grids, model errors or uncertain decisions retain an image-only handoff. Hidden legacy tiles are excluded from numbering. Changed panels or refreshed tiles discard the stale answer and continue with fresh screenshots within the attempt bounds. Activity reports loading diagnostics, **GPT-6 Luna · low reasoning**, request budgets, answer arrival, tile selection and image Verify. Quit and relaunch after upgrading so an already running process loads the new solver.
 
 A checkbox tick or a transcription never counts as portal acceptance. On a dedicated verification page, the portal must clear its gate before discovery continues. Changed images/audio, invalid decisions and exhausted attempts produce a visible reason. Provider “Try again later” blocks are detected before solver calls: discovery preserves found properties and continues to other selected websites. The app does not repeatedly request an audio challenge when the provider has blocked it. OTPs and consent remain manual. Live 99acres provider-block clearance is not established.
 
-Audio support requires Python 3.9+, FFmpeg and `SpeechRecognition==3.17.0`. Run `bismyth-leads doctor-fix` to prepare `audio-venv` inside app storage. `BISMYTH_AUDIO_PYTHON` can select an existing interpreter; doctor-fix preserves that override. Audio downloads are limited to observed Google/reCAPTCHA HTTPS payload URLs and bounded sizes. Conversion and transcription have deadlines, are cancelled when the run stops, and retain no audio files. Only challenge audio is sent to Google; contact details are not sent. This audio service is separate from your ChatGPT subscription. Its shared-key recognition route may be refused or unavailable; it does not guarantee successful CAPTCHA verification. The supplied repository's source was not copied.
+The previous audio helper remains packaged for compatibility and explicit injected-helper tests; it is unused by normal app runs. Its optional prerequisites are Python 3.9+, FFmpeg and `SpeechRecognition==3.17.0`, and existing `doctor-fix` setup remains available. Doctor clearly reports automatic audio as disabled. The supplied repository's source was not copied.
 
 WhatsApp automation, AI conversations, manager extraction, calling and CRM integration remain outside this package.
 
