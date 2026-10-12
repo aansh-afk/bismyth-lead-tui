@@ -1,0 +1,19 @@
+{
+  "99acres": {
+    "fields": {
+      "name": ["input[name=\"name\"]"],
+      "phone": ["input[name=\"phone\"]"],
+      "email": ["input[name=\"email\"]"]
+    }
+  },
+  "nobroker": {
+    "openSelector": "#getOwnerDetails"
+  },
+  "housing": {
+    "fields": {
+      "name": ["input[name=\"name\"]"],
+      "phone": ["input[name=\"phone\"]"],
+      "email": ["input[name=\"email\"]"]
+    }
+  }
+}
