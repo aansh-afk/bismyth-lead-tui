@@ -37,6 +37,8 @@ Installed that tarball globally into an empty temporary prefix using npm with in
 
 Tarball SHA-256: `58e410c76b385a4dab062776a9ddd2b81f6f8df527837c3f309060c380790ae6`.
 
+Published the source change as commit `be3fb7eac9c49599c9583d0f5c4d218fbf8fc1ec` and the built tarball in [GitHub release v0.1.3](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.3). GitHub's uploaded asset digest matched the local SHA-256. Downloaded the tagged public installer and executed it with an empty temporary installation prefix; it fetched the public release and installed version 0.1.3 successfully. The installed public command's `doctor` check found Chrome and the saved ChatGPT login using isolated test storage.
+
 ## Live observations
 
 | Check | Result | Time / size |
