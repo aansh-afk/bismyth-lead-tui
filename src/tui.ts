@@ -48,6 +48,10 @@ export class TerminalApp {
   private review?: number;
   private auth = 'Checking ChatGPT login…';
   private picker?: {kind: 'state' | 'city'; query: string; selected: number};
+  private animationTimer?: ReturnType<typeof setInterval>;
+  private animationFrame = 0;
+  private startedAt = 0;
+  private elapsedMs = 0;
   constructor(private config: Config, private readonly store: Store) {}
   async start(): Promise<void> {
     this.history = await this.store.history();
@@ -111,6 +115,8 @@ export class TerminalApp {
     if (text === '?') { this.help = !this.help; this.render(); return; }
     if (key.name === 'up' || key.name === 'down') { this.move(key.name === 'up' ? -1 : 1); return; }
     if (key.name === 'pageup' || key.name === 'pagedown') { this.move(key.name === 'pageup' ? -8 : 8); return; }
+    if (key.name === 'return' && this.runner?.active && this.runner.paused && !this.runner.stopped) { this.runner.pause(); this.render(); return; }
+    if (key.name === 'return' && this.runner?.active && this.runner.handoffMessage && !this.runner.stopped) { this.runner.continue('continue'); return; }
     if (key.name === 'p' && this.runner?.active) { this.runner.pause(); this.render(); return; }
     if (key.name === 's' && this.runner?.active) { void this.runner.stop(); this.notice = 'Stopping browser; saving progress…'; this.render(); return; }
     if (key.name === 'c') { this.runner?.continue('continue'); return; }
@@ -118,7 +124,9 @@ export class TerminalApp {
     if (this.runner?.active) { this.notice = 'Pause, continue, skip or stop the current run first.'; this.render(); return; }
     if (key.name === 'a' && this.screen === 0) { this.advanced = !this.advanced; this.selected[0] = this.advanced ? 8 : 0; this.render(); return; }
     if (key.name === 'return' && this.screen === 0) { this.beginEdit(); this.render(); return; }
-    if ((key.name === 'return' && this.screen === 1 || key.name === 'r') && this.current?.projects.length) { this.review = 0; this.render(); return; }
+    const runShortcut = key.name === 'r';
+    if ((key.name === 'return' && [1, 2].includes(this.screen) || runShortcut && this.screen !== 0) && this.current?.projects.length) { this.review = 0; this.render(); return; }
+    if (key.name === 'return' && [1, 2].includes(this.screen)) { this.notice = 'Queue empty. Ctrl+R finds properties from your setup.'; this.render(); return; }
     void this.action(async () => {
       if (key.name === 'return') {
         if (this.screen === 3 && this.history[this.selected[3]]) {
@@ -131,7 +139,7 @@ export class TerminalApp {
         this.current = createRun(this.config); await this.store.save(this.current);
         this.screen = 1; this.selected[1] = 0; this.notice = 'New empty run created. d discovers projects; i imports configured URLs.';
       }
-      if (key.name === 'd') await this.launch(true);
+      if (key.name === 'd' || runShortcut) await this.launch(true);
       if (key.name === 'i') await this.importQueue();
       if (key.name === 'v' && this.current) {
         const run = createRun(this.config);
@@ -233,6 +241,7 @@ export class TerminalApp {
     if (!this.current || !discover && !this.current.projects.length) throw new Error('Discover or import projects before starting a run.');
     const errors = validateConfig(this.current.config, !discover);
     if (errors.length) throw new Error(errors.join(' '));
+    this.animationFrame = 0; this.startedAt = Date.now(); this.elapsedMs = 0;
     this.runner = new Runner(this.current, this.store, new PortalBrowser(this.store.directory));
     this.runner.on('change', this.render); this.screen = 2;
     this.notice = discover ? 'Discovering projects in Chrome…' : 'Processing saved queue in ' + this.current.config.mode + ' mode…';
@@ -244,12 +253,21 @@ export class TerminalApp {
   }
   private render = (): void => {
     if (this.closing) return;
+    const animating = this.runner?.active && !this.runner.paused && !this.runner.stopped && !this.runner.handoffMessage && ['discovering', 'running'].includes(this.current?.state || '');
+    if (animating) {
+      this.elapsedMs = Date.now() - this.startedAt;
+      if (!this.animationTimer) {
+        this.animationTimer = setInterval(() => { this.animationFrame = (this.animationFrame + 1) % 10; this.render(); }, 120);
+        this.animationTimer.unref();
+      }
+    } else if (this.animationTimer) { clearInterval(this.animationTimer); this.animationTimer = undefined; }
     process.stdout.write(renderView({
       width: process.stdout.columns || 100, height: process.stdout.rows || 30,
       screen: this.screen, selected: this.selected, config: this.config,
       run: this.current, history: this.history, advanced: this.advanced,
       notice: this.notice, help: this.help, handoff: this.runner?.handoffMessage || '',
       active: Boolean(this.runner?.active), auth: this.auth, review: this.review,
+      animationFrame: this.animationFrame, elapsedMs: this.elapsedMs, stopping: Boolean(this.runner?.active && this.runner.stopped),
       editing: this.editing ? {label: this.editing.field.label, buffer: this.editing.buffer, hint: this.editing.field.hint} : undefined,
       picker: this.picker ? {title: this.picker.kind === 'state' ? 'Choose a state / UT · India' : 'Choose a city · ' + (indiaStates.find(state => state.code === this.config.stateCode)?.name || ''), query: this.picker.query, selected: this.picker.selected, choices: this.pickerChoices().map(choice => choice.label)} : undefined,
       fields: fields.map((field, index) => ({index, label: field.label, hint: field.hint, value: field.key === 'stateCode' ? indiaStates.find(state => state.code === this.config.stateCode)?.name || '' : this.fieldValue(field)})).filter(field => this.advanced ? field.index >= 8 : field.index < 8),
@@ -258,6 +276,7 @@ export class TerminalApp {
   private async shutdown(): Promise<void> {
     if (this.closing) return;
     this.closing = true;
+    if (this.animationTimer) { clearInterval(this.animationTimer); this.animationTimer = undefined; }
     try { if (this.runner?.active) await this.runner.stop(); await this.task; }
     finally {
       process.stdin.off('keypress', this.keypress); process.stdout.off('resize', this.render);

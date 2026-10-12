@@ -24,27 +24,34 @@ export interface View {
   advanced: boolean; notice: string; help: boolean; handoff: string; active: boolean;
   auth: string; editing?: {label: string; buffer: string; hint: string}; review?: number;
   picker?: {title: string; query: string; selected: number; choices: string[]};
+  animationFrame?: number; elapsedMs?: number; stopping?: boolean;
 }
 export function renderView(view: View): string {
   const width = Math.max(20, view.width); const height = Math.max(8, view.height);
-  if (width < 70 || height < 22) return '\x1b[H' + paint('Bismyth · Enquiry desk', ansi.cyan) + '\r\nResize your terminal to at least 70 × 22.\r\nYour run keeps its progress. Q exits.\x1b[J';
+  const run = view.run;
+  const seconds = Math.floor(Math.max(0, view.elapsedMs || 0) / 1000);
+  const elapsed = `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+  const spinner = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'][(view.animationFrame || 0) % 10];
+  const status = view.active && view.stopping ? '■ Stopping · saving progress' : view.active && run?.state === 'paused' ? 'Ⅱ Paused · Enter resumes' : view.active && view.handoff ? '◆ Needs you in Chrome · Enter continues' : view.active && run?.state === 'discovering' ? `${spinner} Finding properties · ${elapsed}` : view.active && run?.state === 'running' ? `${spinner} ${run.config.mode === 'preview' ? 'Testing forms' : 'Sending enquiries'} · ${elapsed}` : run?.state === 'complete' ? '✓ Run finished' : run?.state === 'stopped' ? '■ Run stopped · progress saved' : run?.state === 'ready' ? '✓ Queue ready' : 'Run & results';
+  const statusColor = view.stopping || run?.state === 'paused' || view.handoff ? ansi.amber : ansi.cyan;
+  if (width < 70 || height < 22) return '\x1b[H' + paint('Bismyth · Enquiry desk', ansi.cyan) + '\r\n' + (view.active ? paint(cell(status, width), statusColor) + '\r\n' : '') + 'Resize your terminal to at least 70 × 22.\r\nYour run keeps its progress. Q exits.\x1b[J';
   const sidebar = width >= 100 ? 21 : 0;
   const area = width - sidebar - 6;
   const lines: string[] = [];
   const names = ['Set up', 'Review queue', 'Run & results', 'Saved runs'];
-  lines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  enquiry desk', ansi.faint));
+  lines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  enquiry desk', ansi.faint) + (view.active ? paint('    ' + cell(status, width - 30), statusColor) : ''));
   lines.push('  ' + paint(cell('AI · ' + view.auth, width - 5), view.auth.includes('connected') ? ansi.green : ansi.amber));
   lines.push(paint('  ' + '─'.repeat(width - 4), ansi.faint));
   if (!sidebar) lines.push('  ' + names.map((name, i) => paint(` ${i + 1} ${name} `, view.screen === i ? ansi.selected : ansi.faint)).join(' '));
   const body: string[] = [];
   const add = (text = '', color = ansi.text): void => { body.push(paint(cell(text, area), color)); };
-  const run = view.run; const count = run ? counts(run) : undefined;
+  const count = run ? counts(run) : undefined;
   if (view.help) {
     add('Keyboard guide', ansi.bright); add('');
-    for (const text of ['1–4 or Tab   Change section', '↑ / ↓        Move selection', 'Enter        Edit a field / review and start / load a saved run', 'F            Find properties from your setup', 'A            Show or hide advanced settings', 'P            Pause or resume the browser', 'C / K        Continue after a browser step / skip it', 'S            Stop and save progress', 'X / J        Export CSV / JSON', 'Q            Save progress and quit']) add(text);
+    for (const text of ['1–4 or Tab   Change section', '↑ / ↓        Move selection', 'Enter        Edit / review / continue browser prompt / resume', 'Ctrl+R       Find properties or review the current queue', 'F            Find properties from your setup', 'A            Show or hide advanced settings', 'P            Pause or resume the browser', 'C / K        Continue after a browser step / skip it', 'S            Stop and save progress', 'X / J        Export CSV / JSON', 'Q            Save progress and quit']) add(text);
   } else if (view.screen === 0) {
     add(view.advanced ? 'Advanced settings' : 'Start a property enquiry run', ansi.bright);
-    add(view.advanced ? 'Optional settings. A returns to the guided setup.' : 'Fill in these details, then press F to find properties.', ansi.faint);
+    add(view.advanced ? 'Optional settings. A returns to the guided setup.' : 'Enter edits a field. F or Ctrl+R finds properties.', ansi.faint);
     add('');
     const available = height - (sidebar ? 13 : 14);
     const selected = view.selected[0];
@@ -59,6 +66,7 @@ export function renderView(view: View): string {
   } else if (view.screen === 1) {
     add('Review your property queue', ansi.bright);
     add(run ? `${run.projects.length} ${run.projects.length === 1 ? 'property' : 'properties'} · ${run.config.city} · ${run.config.intent === 'buy' ? 'Buying' : 'Renting'}` : 'Find properties first, then choose a test or a live run.', ansi.faint);
+    if (run?.projects.length) add('Enter / Ctrl+R → choose Test forms or Send enquiries', ansi.cyan);
     add('');
     if (!run?.projects.length) {
       add('Nothing in your queue yet.', ansi.bright); add('');
@@ -68,13 +76,13 @@ export function renderView(view: View): string {
     } else {
       add(`${cell('WEBSITE', 10)} ${cell('STATE', 11)} PROPERTY`, ansi.faint);
       const start = Math.max(0, view.selected[1] - Math.floor((height - 16) / 2));
-      for (const [offset, item] of run.projects.slice(start, start + height - 15).entries()) add(`${cell(item.site, 10)} ${cell(item.status, 11)} ${item.title}`, start + offset === view.selected[1] ? ansi.selected : item.status === 'submitted' ? ansi.green : ansi.text);
+      for (const [offset, item] of run.projects.slice(start, start + height - 16).entries()) add(`${cell(item.site, 10)} ${cell(item.status, 11)} ${item.title}`, start + offset === view.selected[1] ? ansi.selected : item.status === 'submitted' ? ansi.green : ansi.text);
       add('');
       const item = run.projects[view.selected[1]];
       if (item) { add(item.detail || 'Ready to review. Enter chooses how to run this queue.', ansi.faint); add(item.url, ansi.faint); }
     }
   } else if (view.screen === 2) {
-    add(run?.state === 'complete' ? 'Your run has finished' : view.active ? 'Browser working' : 'Run & results', ansi.bright);
+    add(status, view.active ? statusColor : ansi.bright);
     add(run ? `${run.config.city} · ${run.config.mode === 'preview' ? 'Test forms' : 'Send enquiries'} · ${run.state}` : 'Review a queue and choose a run to see progress here.', ansi.faint);
     add('');
     if (run && count) {
@@ -107,7 +115,7 @@ export function renderView(view: View): string {
   lines.push(paint('  ' + '─'.repeat(width - 4), ansi.faint));
   const notice = view.handoff ? 'CHROME NEEDS YOU · ' + view.handoff : view.notice;
   lines.push('  ' + paint(cell(notice, width - 4), view.handoff ? ansi.amber : ansi.faint));
-  const footer = view.handoff ? 'C Continue after completing the browser step    K Skip    S Stop' : view.active ? 'P Pause / resume    S Stop & save    1–4 Change view    Q Quit' : view.screen === 0 ? 'Enter Edit    F Find properties    A Advanced    Tab Next section    Q Quit' : view.screen === 1 ? 'Enter Choose test / send run    ↑↓ Review list    X Export    1 Set up    Q Quit' : 'Enter Load run    X Export CSV    J Export JSON    1–4 Sections    ? Help    Q Quit';
+  const footer = view.active && run?.state === 'paused' ? 'Enter / P Resume    S Stop & save    1–4 Change view    Q Quit' : view.handoff ? 'Enter / C Continue after Chrome step    K Skip    S Stop    Q Quit' : view.active ? 'P Pause    S Stop & save    1–4 Change view    Q Quit' : view.screen === 0 ? 'Enter Edit    F / Ctrl+R Find properties    A Advanced    Q Quit' : [1, 2].includes(view.screen) && !run?.projects.length ? 'Ctrl+R Find properties    1 Set up    1–4 Sections    Q Quit' : view.screen === 1 ? 'Enter / Ctrl+R Choose test or send    ↑↓ Review    X Export    Q Quit' : view.screen === 2 ? 'Enter / Ctrl+R Review queue    X Export    1–4 Sections    Q Quit' : 'Enter Load run    X Export CSV    J Export JSON    1–4 Sections    ? Help    Q Quit';
   lines.push('  ' + paint(cell(footer, width - 4), ansi.cyan));
   if (view.editing || view.review !== undefined || view.picker) {
     const modalWidth = Math.min(width - 12, 68); const x = Math.floor((width - modalWidth) / 2); const y = Math.max(4, Math.floor(height / 2) - 5);

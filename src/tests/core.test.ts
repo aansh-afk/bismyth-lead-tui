@@ -155,13 +155,38 @@ test('terminal output removes embedded control sequences', () => { assert.equal(
 test('guided terminal view shows subscription, next steps, and explicit review choices', () => {
   const view = {width: 100, height: 30, screen: 0, selected: [0, 0, 0, 0], config, history: [], fields: [{index: 0, label: 'City / location', value: 'Pune', hint: 'Choose your city'}], advanced: false, notice: 'Start here', help: false, handoff: '', active: false, auth: 'ChatGPT subscription connected'};
   const screen = renderView(view);
-  assert.ok(screen.includes('Start a property enquiry run')); assert.ok(screen.includes('F Find properties'));
+  assert.ok(screen.includes('Start a property enquiry run')); assert.ok(screen.includes('F / Ctrl+R Find properties'));
   assert.ok(screen.includes('Subscription AI')); assert.ok(!screen.includes('Laya endpoint'));
   const run = createRun(config); run.projects = [item()];
   const review = renderView({...view, screen: 1, run, review: 0});
   assert.ok(review.includes('Test forms')); assert.ok(review.includes('Send enquiries')); assert.ok(review.includes('Back to queue'));
   const compact = renderView({...view, width: 80, height: 24}); assert.ok(compact.includes('Start a property enquiry run'));
   assert.ok(renderView({...view, width: 40}).includes('Resize your terminal'));
+});
+test('run feedback animates work and accurately labels pause, browser handoff and completion', () => {
+  const run = createRun(config); run.state = 'running'; run.projects = [item()];
+  const view = {width: 100, height: 30, screen: 2, selected: [0, 0, 0, 0], config, run, history: [], fields: [], advanced: false, notice: '', help: false, handoff: '', active: true, auth: 'ChatGPT subscription connected', elapsedMs: 65000};
+  const first = renderView({...view, animationFrame: 0});
+  const second = renderView({...view, animationFrame: 1});
+  assert.match(first, /⠋ Testing forms · 1:05/); assert.match(second, /⠙ Testing forms · 1:05/);
+  assert.notEqual(first, second);
+  assert.match(renderView({...view, screen: 0, animationFrame: 1}), /⠙ Testing forms/);
+  assert.match(renderView({...view, width: 40, animationFrame: 1}), /⠙ Testing forms/);
+  run.state = 'discovering'; assert.match(renderView(view), /Finding properties/);
+  run.config.mode = 'submit'; run.state = 'running'; assert.match(renderView(view), /Sending enquiries/);
+  for (const [state, handoff, stopping, label] of [
+    ['paused', '', false, 'Paused'], ['running', 'Complete fixture step', false, 'Needs you in Chrome'],
+    ['running', '', true, 'Stopping'], ['ready', '', false, 'Queue ready'], ['complete', '', false, 'Run finished'], ['stopped', '', false, 'Run stopped'],
+  ] as const) {
+    run.state = state;
+    const current = {...view, handoff, stopping};
+    const rendered = renderView({...current, animationFrame: 0});
+    assert.ok(rendered.includes(label)); assert.doesNotMatch(rendered, /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/);
+    assert.equal(rendered, renderView({...current, animationFrame: 1}));
+  }
+  run.state = 'paused'; assert.match(renderView(view), /Enter \/ P Resume/);
+  run.state = 'running'; assert.match(renderView({...view, handoff: 'Fixture'}), /Enter \/ C Continue/);
+  assert.match(renderView({...view, active: false}), /Enter \/ Ctrl\+R Review queue/);
 });
 test('subscription child environment excludes API keys and API gateway overrides', () => {
   const before = process.env.OPENAI_API_KEY;
