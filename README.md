@@ -6,10 +6,10 @@ Interactive terminal app for property enquiry batches and public seller contacts
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.17** from the GitHub release:
+Install **v0.1.18** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.17/bismyth-lead-tui-0.1.17.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.18/bismyth-lead-tui-0.1.18.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.17/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.18/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -71,7 +71,7 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.17.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.18.tgz`. A local build does not publish a GitHub or npm release.
 
 ## Guided workflow
 
@@ -83,7 +83,7 @@ To package this checkout for another machine, run `npm pack` and install the res
 
 **1–5 / Tab** change sections. **A** on Set up reveals advanced settings, including URL import, browser path, delays, adapter overrides and your **WhatsApp business** name. **?** opens the keyboard guide. You can import a project URL file with **I**, then review it with Enter. Advanced settings are optional for property enquiries.
 
-**Ctrl+R** finds properties from Set up, or opens the test/send chooser for the current queue on another screen. **Enter** on Review queue opens that same chooser; press Enter again to start the selected mode. During a run, Enter resumes a pause or continues after you complete a browser prompt. A spinner and elapsed time show active discovery/form processing even when no new log arrives. Paused runs, browser handoffs, stopping and finished runs use static status labels, and the animation stops when work ends.
+**Ctrl+R** finds properties from Set up or an empty queue. On another screen, an existing queue opens the test/send chooser. Saved confirmed logins work after restarting; you do not need to finish the website-login step again. Opening the chooser keeps you on the current page and starts no work. Before running, every website represented in the queue needs a confirmed login; missing logins are named with **L** to open website logins, and the queue is kept intact. **Enter** on Review queue opens that same chooser; press Enter again to start the selected mode. During a run, Enter resumes a pause or continues after you complete a browser prompt. A spinner and elapsed time show active discovery/form processing even when no new log arrives. Paused runs, browser handoffs, stopping and finished runs use static status labels, and the animation stops when work ends.
 
 Use a terminal at least 70 columns by 22 rows. Wider terminals show a workflow sidebar; smaller supported terminals show section tabs. Undersized terminals ask you to resize while keeping progress.
 

@@ -68,7 +68,6 @@ export class TerminalApp {
   private accountSetup = true;
   private accounts: AccountSnapshot = blankAccounts();
   private accountSelected = 0;
-  private accountsReviewed = false;
   private accountOperation?: string;
   private accountTask?: Promise<void>;
   private accountBrowser?: Pick<AccountBrowser, 'open' | 'check' | 'close'>;
@@ -138,8 +137,11 @@ export class TerminalApp {
       else if (key.name === 'return') {
         const choice = this.review; this.review = undefined;
         if (choice < 2 && this.current) void this.action(async () => {
-          if (!this.ensureAccountsReviewed()) return;
-          const run = createRun({...this.current!.config, mode: choice === 0 ? 'preview' : 'submit'});
+          if (!this.ensureQueueAccounts()) return;
+          const config: Config = {...this.current!.config, mode: choice === 0 ? 'preview' : 'submit'};
+          const errors = validateConfig(config, true);
+          if (errors.length) throw new Error(errors.join(' '));
+          const run = createRun(config);
           run.projects = this.current!.projects.map(copyProject);
           this.current = run; await this.store.save(run); await this.launch(false);
         });
@@ -223,7 +225,7 @@ export class TerminalApp {
     if (key.name === 'a' && this.screen === 0) { this.advanced = !this.advanced; this.selected[0] = this.advanced ? 9 : 0; this.render(); return; }
     if (key.name === 'return' && this.screen === 0) { this.beginEdit(); this.render(); return; }
     const runShortcut = key.name === 'r';
-    if ((key.name === 'return' && [1, 2].includes(this.screen) || runShortcut && this.screen !== 0) && this.current?.projects.length) { if (this.ensureAccountsReviewed()) this.review = 0; this.render(); return; }
+    if ((key.name === 'return' && [1, 2].includes(this.screen) || runShortcut && this.screen !== 0) && this.current?.projects.length) { this.review = 0; this.render(); return; }
     if (key.name === 'return' && [1, 2].includes(this.screen)) { this.notice = 'Queue empty. Ctrl+R finds properties from your setup.'; this.render(); return; }
     void this.action(async () => {
       if (key.name === 'return') {
@@ -281,7 +283,7 @@ export class TerminalApp {
         if (action === 'done') {
           await this.accountBrowser?.close();
           await this.store.saveAccounts(this.accounts);
-          this.accountsReviewed = true; this.accountSetup = false; this.selected[0] = 1;
+          this.accountSetup = false; this.selected[0] = 1;
           this.notice = 'Website sessions saved. Continue with your location and contact details; L reopens website logins.';
           return;
         }
@@ -396,7 +398,7 @@ export class TerminalApp {
   }
   private async launch(discover: boolean): Promise<void> {
     if (this.closing) return;
-    if (!this.ensureAccountsReviewed()) return;
+    if (!discover && !this.ensureQueueAccounts()) return;
     await this.accountBrowser?.close();
     if (this.closing) return;
     let skipped: Site[] = [];
@@ -513,10 +515,10 @@ export class TerminalApp {
       this.render();
     }).catch(error => { this.notice = (error as Error).message; this.render(); });
   }
-  private ensureAccountsReviewed(): boolean {
-    if (this.accountsReviewed) return true;
-    this.screen = 0; this.accountSetup = true; this.advanced = false; this.help = false;
-    this.notice = 'Connect your website accounts first. N continues to your profile; discovery uses only confirmed logins.';
+  private ensureQueueAccounts(): boolean {
+    const {skipped} = discoveryAccess(this.current?.projects.map(item => item.site) || [], this.accounts);
+    if (!skipped.length) return true;
+    this.notice = 'Check website logins before running this queue: ' + skipped.map(site => portalAccounts.find(portal => portal.id === site)?.label || site).join(', ') + '. L opens website logins; C checks after sign-in. Then return to Review queue (2).';
     return false;
   }
   private render = (): void => {

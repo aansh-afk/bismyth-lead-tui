@@ -64,7 +64,6 @@ test('login-only Quikr cannot become a discovery adapter through saved preferenc
 interface Controller {
   screen: number;
   accountSetup: boolean;
-  accountsReviewed: boolean;
   accounts: AccountSnapshot;
   current?: Run;
   runner?: Runner;
@@ -92,7 +91,6 @@ async function fixture(t: TestContext): Promise<{app: Controller; store: Store; 
   const browser = new InspectionOnlyBrowser();
   const app = new TerminalApp(config, store, browser) as unknown as Controller;
   app.render = () => undefined;
-  app.accountsReviewed = true;
   app.accountSetup = false;
   return {app, store, config, browser, originalConfig};
 }

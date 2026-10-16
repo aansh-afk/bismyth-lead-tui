@@ -20,7 +20,6 @@ interface AppController {
   selected: number[];
   accountSetup: boolean;
   accountSelected: number;
-  accountsReviewed: boolean;
   accounts: AccountSnapshot;
   accountTask?: Promise<void>;
   current?: Run;
@@ -98,7 +97,6 @@ test('initial Set up starts with website accounts before the saved contact profi
   const {app, browser, store, config, originalConfig} = await fixture(t);
   assert.equal(app.screen, 0);
   assert.equal(app.accountSetup, true);
-  assert.equal(app.accountsReviewed, false);
   const accountView = app.accountSetupView();
   assert.ok(accountView);
   assert.deepEqual(accountView.accounts, blankAccounts().accounts);
@@ -132,8 +130,7 @@ test('C checks the same website, persists signed-in observation and advances one
   assert.deepEqual(browser.calls, ['open:99acres', 'check:99acres']);
   assert.equal(app.accountSelected, 1);
   assert.match(app.notice, /99acres login successful/);
-  assert.equal(app.accountSetup, true);
-  assert.equal(app.accountsReviewed, false, 'checking one website does not finish the setup step');
+  assert.equal(app.accountSetup, true, 'checking one website keeps the account list open');
   assert.deepEqual((await store.accounts()).accounts[0], {portal: '99acres', status: 'signed-in', checkedAt, detail: accountStatusDetails['signed-in']});
   await assertProfileUnchanged(store, originalConfig, config);
 });
@@ -162,7 +159,6 @@ test('K skips a website while preserving its open browser and saved profile data
   assert.equal(await readFile(profileMarker, 'utf8'), 'existing-fixture-browser-state');
   assert.equal(app.accountSelected, 1);
   assert.equal((await store.accounts()).accounts[0].status, 'skipped');
-  assert.equal(app.accountsReviewed, false);
   await assertProfileUnchanged(store, originalConfig, config);
 });
 
@@ -174,7 +170,6 @@ test('N closes account Chrome and continues in Set up; L reopens the account sta
   assert.equal(app.screen, 0);
   assert.equal(app.accountSetup, false);
   assert.equal(app.accountSetupView(), undefined);
-  assert.equal(app.accountsReviewed, true);
   assert.equal(app.selected[0], 1, 'profile continues at the state selector');
   press(app, 'l');
   assert.equal(app.screen, 0);
@@ -191,7 +186,6 @@ test('expanded account diagnostics close with Escape and still allow Enter to op
   press(app, 'escape');
   assert.equal(app.details, undefined);
   assert.equal(app.accountSetup, true, 'Escape closes the diagnostic before leaving account setup');
-  assert.equal(app.accountsReviewed, false);
   assert.deepEqual(browser.calls, []);
   press(app, 'e');
   await accountAction(app, 'return');
@@ -214,7 +208,7 @@ test('N dismisses the keyboard guide so completing account setup reveals the pro
   await assertProfileUnchanged(store, originalConfig, config);
 });
 
-test('discovery before finishing account setup redirects to Set up without browser work or a new run', async t => {
+test('discovery without a confirmed login returns to Set up without a browser job or new run', async t => {
   const {app, browser, store, config, originalConfig} = await fixture(t);
   press(app, '2');
   assert.equal(app.screen, 1);
@@ -223,15 +217,15 @@ test('discovery before finishing account setup redirects to Set up without brows
   assert.equal(app.busy, false);
   assert.equal(app.screen, 0);
   assert.equal(app.accountSetup, true);
-  assert.match(app.notice, /website accounts first/);
-  assert.deepEqual(browser.calls, []);
+  assert.match(app.notice, /No selected property website has a confirmed login/);
+  assert.deepEqual(browser.calls, ['close']);
   assert.equal(app.current, undefined);
   assert.equal(app.runner, undefined);
   assert.deepEqual(await store.history(), []);
   await assertProfileUnchanged(store, originalConfig, config);
 });
 
-test('Enter and R on a saved queue require account setup without copying or starting that run', async t => {
+test('Enter and R on a saved queue open review without leaving the page or starting that run', async t => {
   for (const shortcut of ['return', 'r'] as const) {
     const {app, browser, store, config, originalConfig} = await fixture(t);
     const saved = createRun(config);
@@ -242,16 +236,15 @@ test('Enter and R on a saved queue require account setup without copying or star
     press(app, '2');
     press(app, shortcut);
     await setImmediate();
-    assert.equal(app.screen, 0, `${shortcut} redirects to Set up`);
+    assert.equal(app.screen, 1, `${shortcut} stays on Review queue`);
     assert.equal(app.accountSetup, true);
-    assert.equal(app.accountsReviewed, false);
-    assert.equal(app.review, undefined, 'no run-mode chooser appears before account setup');
+    assert.equal(app.review, 0, 'the read-only chooser defaults to Test forms');
     assert.equal(app.current, saved, 'the original queue remains selected');
     assert.deepEqual(app.current, before);
     assert.equal(app.runner, undefined);
     assert.deepEqual(browser.calls, []);
     const history = await store.history();
-    assert.equal(history.length, 1, 'account gating does not save a copied run');
+    assert.equal(history.length, 1, 'opening review does not save a copied run');
     assert.deepEqual(history[0], before);
     await assertProfileUnchanged(store, originalConfig, config);
   }
@@ -264,12 +257,14 @@ test('a pending run-mode choice also checks accounts before copying its saved qu
   await store.save(saved);
   const before = structuredClone(saved);
   app.current = saved;
+  app.screen = 1;
   app.review = 0;
   press(app, 'return');
   await setImmediate();
   assert.equal(app.busy, false);
-  assert.equal(app.screen, 0);
+  assert.equal(app.screen, 1, 'a missing login preserves the current page');
   assert.equal(app.accountSetup, true);
+  assert.match(app.notice, /Check website logins.*Housing.*L opens website logins/);
   assert.equal(app.review, undefined);
   assert.equal(app.current, saved);
   assert.deepEqual(app.current, before);
