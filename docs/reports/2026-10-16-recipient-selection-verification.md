@@ -26,7 +26,15 @@ The focused six-file regression run passed **65/65**, with no failures/cancellat
 
 An initial build exposed TypeScript control-flow narrowing in a test assertion; reading the mutable controller property afresh resolved it. Initial pseudo-terminal attempts exposed a startup-read assumption and an obsolete screen-title expectation in the new harness. Waiting for the actual Atlas lead desk title corrected the harness. The complete source-launcher terminal scenario passed afterward.
 
+The installed-command smoke check exposed another harness timing assumption: Node can wait 500 ms to distinguish a lone Escape from an Alt sequence. Its next key sometimes reached the still-open review dialog. The harness now waits 900 ms for Escape and asserts that the dialog closed before continuing. The complete scenario then passed against `/home/aansh/.local/bin/bismyth-leads`, including preview default, unchecked-focus exclusion, cancellation, independent runs, restart, select-all/clear and compact controls. No production change was required after the final regression run.
+
 The final full configured `npm test` run passed **391/391**, with zero failures, cancellations or skips, in **163.398 seconds**. No production changes followed that run. Both source checkouts built successfully. Installer shell syntax and git whitespace checks passed. The packaged archive contains **39 files**, **126962 bytes**, with SHA-256 `af3ae20ce768deb8f1124ee9b1ee6f985256a3b1287784bc313ba0c59e037b91`. Compiled package files match both checkouts. Tests, source maps, credentials and browser profiles are excluded. The actual saved Firecrawl credential and user-provided example contact occur zero times in archive contents.
+
+## Release and local installation
+
+Source commit: `bb0b10c`. [Release v0.1.22](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.22), the annotated tag and both archive/checksum assets were published successfully. An anonymous public download matched the SHA-256 above. The public pinned installer matched the reviewed local installer byte for byte, passed shell syntax validation and installed under `/home/aansh/.local`.
+
+The PATH command resolves to `/home/aansh/.local/bin/bismyth-leads`; both that explicit path and the short command report **0.1.22**. All **39 installed files** match the archive byte for byte. A fresh preinstallation snapshot covered **25 saved files**: configuration, account observations, root/run JSON/CSV and credential files. Hashes and permissions stayed unchanged, with zero new saved files. No user TUI or Chrome process was stopped or reloaded.
 
 ## Remaining product issues
 

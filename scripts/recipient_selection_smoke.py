@@ -88,7 +88,8 @@ with tempfile.TemporaryDirectory(prefix="bismyth-recipient-pty-") as temporary:
 
     def press(master, keys):
         os.write(master, keys)
-        return read_for(master, 0.5 if keys == b"\x1b" else 0.3)
+        # Node waits up to 500 ms to distinguish Escape from an Alt sequence.
+        return read_for(master, 0.9 if keys == b"\x1b" else 0.3)
 
     def wait_for(master, text, timeout=20):
         output = ""
@@ -126,7 +127,8 @@ with tempfile.TemporaryDirectory(prefix="bismyth-recipient-pty-") as temporary:
         review = press(master, b"\r")
         assert "1 recipients: " + first["value"] in review, review
         assert "Preview only" in review, review
-        press(master, b"\x1b")
+        cancelled = press(master, b"\x1b")
+        assert "Contacts → Atlas outreach" in cancelled and "Review WhatsApp introduction" not in cancelled, cancelled
         press(master, b"4")
         press(master, b"\x1b[B")
         other = press(master, b"w")
