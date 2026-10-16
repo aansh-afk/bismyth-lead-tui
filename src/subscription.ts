@@ -8,7 +8,7 @@ import type {Candidate} from './laya.js';
 const execute = promisify(execFile);
 export function subscriptionEnvironment(): NodeJS.ProcessEnv {
   const env = {...process.env};
-  for (const key of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_ORG_ID', 'OPENAI_PROJECT_ID']) delete env[key];
+  for (const key of ['OPENAI_API_KEY', 'CODEX_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_ORG_ID', 'OPENAI_PROJECT_ID', 'FIRECRAWL_API_KEY', 'BISMYTH_WHATSAPP_ROUTER_API_KEY']) delete env[key];
   return env;
 }
 export async function subscriptionStatus(): Promise<string> {

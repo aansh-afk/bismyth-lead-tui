@@ -1,0 +1,3 @@
+Hi {{contact_name}}, {{sender_name}} here from {{sender_business}}. I'm reaching out about sales operations and business partnerships. Are you the right person to speak with, or could you introduce me to your sales manager, agency owner or business head?
+
+You're welcome to forward this message. If they're happy to be contacted, their official work number would help. Thanks!

@@ -1,22 +1,23 @@
 # Bismyth property enquiry TUI
 
-Interactive terminal app for property enquiry batches. Playwright drives a persistent Chrome session; Codex uses your saved ChatGPT login for AI contact-control decisions.
+Interactive terminal app for property enquiry batches and public seller contacts. **Playwright** handles website logins and property interests, **Firecrawl** reads public listing contact details, and a separately hosted **Baileys router** handles explicitly confirmed WhatsApp introductions. Codex uses your saved ChatGPT login to classify public contacts and choose observed browser controls.
 
 ## Install
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install the ready-built release:
+Install **v0.1.15** from the GitHub release:
 
 ```bash
-npm install -g https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.12/bismyth-lead-tui-0.1.12.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.15/bismyth-lead-tui-0.1.15.tgz
+bismyth-leads --version
 bismyth-leads
 ```
 
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.12/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.15/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -39,11 +40,20 @@ bismyth-leads doctor-fix
 bismyth-leads history
 bismyth-leads export RUN_ID csv
 bismyth-leads check-subscription
+bismyth-leads firecrawl-login
+bismyth-leads collect-contacts RUN_ID 3
+bismyth-leads export-contacts RUN_ID csv
 ```
 
 ## Try a small batch
 
-Launch `bismyth-leads`, choose your **State / UT**, then choose the city from its India-only list. Enter your contact details and type **3** in Batch size. Press **F**, review the discovered properties, press **Enter**, and choose **Test forms**. Press **C** after browser handoffs, **K** to skip or **S** to stop. Test forms skips the final submit step; a logged-in site's contact entry point can itself initiate a portal action.
+Launch `bismyth-leads`. The first **Set up** page starts with **Website logins**. Select a website and press **Enter** to open it in Chrome. Enter passwords and OTPs directly into the website, then press **C** in the terminal to check that page. If needed, open the website's account menu so Logout or another signed-in control is visible. **K** skips a website; **N** saves the browser session and continues to your profile on the same Set up page. **L** reopens website logins.
+
+Choose your **State / UT**, then choose the city from its India-only list. Enter your contact details and type **3** in Batch size. Press **F**, review the discovered properties, press **Enter**, and choose **Test forms**. Press **C** after browser handoffs, **K** to skip or **S** to stop. Test forms skips the final submit step; a logged-in site's contact entry point can itself initiate a portal action.
+
+Website login setup covers 99acres, NoBroker, Housing, Square Yards, Magicbricks, OLX and Quikr. The latter four currently have **login only**; saving their sessions does not add a listing/enquiry adapter. Saved observations say **Last verified**, not that a session is still authenticated. Login checks do not reload the page, submit credentials or invoke AI/CAPTCHA automation. Browser cookies stay in the private persistent profile; `accounts.json` stores only portal status and observation times. Skipping preserves existing browser data. **N** can continue with available or guest sessions.
+
+NoBroker checks recognise its signed-in profile icon even while the hover menu is closed. After signing in, select NoBroker in Set up and press **C**: a confirmed session shows **NoBroker login successful** in green. The check does not open the menu, click Sign Out or read account values.
 
 For development tests against a local fixture, clone the repository and run `npm ci && npm test`. These do not send real portal enquiries.
 
@@ -59,20 +69,84 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.15.tgz`. A local build does not publish a GitHub or npm release.
+
 ## Guided workflow
 
-1. **Set up:** choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties after all required details are complete.
+1. **Set up:** connect website accounts first, then **N** continues to the profile. Choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties after the account step is reviewed and all required details are complete. **L** or the Website logins field returns to account setup.
 2. **Review queue:** discovery brings you here automatically. Scroll the properties, then press **Enter**. Choose **Test forms** to prepare forms without the final submit step, or **Send enquiries** to submit your supplied contact details. The dialog shows the queue size, location, name and phone before starting.
 3. **Run & results:** follow progress and activity. If Chrome needs verification or extra fields, complete that browser step and press **C**. **K** skips it, **P** pauses/resumes, and **S** stops and saves progress. Results distinguish confirmed enquiries from tested forms and uncertain outcomes.
 4. **Saved runs:** Enter loads a previous run. **X** exports CSV; **J** exports JSON. **Q** saves progress and exits.
+5. **Contacts:** **H** collects a bounded number of public listing pages with Firecrawl. **E** shows source evidence, **A** toggles approval, **Space** selects contacts, and **W** reviews the selected WhatsApp batch. **Enter** reviews just the highlighted contact. The review dialog defaults to **Preview only**; sending requires choosing **Send reviewed introductions** and pressing Enter. **C** checks the router sender; **U** reconciles saved operations and refreshes replies. **O** exports contact CSV; **Shift+O** exports contact JSON.
 
-**1–4 / Tab** change sections. **A** on Set up reveals advanced settings, including URL import, browser path, delays and adapter overrides. **?** opens the keyboard guide. You can import a project URL file with **I**, then review it with Enter. Advanced settings are optional for the normal workflow.
+**1–5 / Tab** change sections. **A** on Set up reveals advanced settings, including URL import, browser path, delays, adapter overrides and your **WhatsApp business** name. **?** opens the keyboard guide. You can import a project URL file with **I**, then review it with Enter. Advanced settings are optional for property enquiries.
 
 **Ctrl+R** finds properties from Set up, or opens the test/send chooser for the current queue on another screen. **Enter** on Review queue opens that same chooser; press Enter again to start the selected mode. During a run, Enter resumes a pause or continues after you complete a browser prompt. A spinner and elapsed time show active discovery/form processing even when no new log arrives. Paused runs, browser handoffs, stopping and finished runs use static status labels, and the animation stops when work ends.
 
 Use a terminal at least 70 columns by 22 rows. Wider terminals show a workflow sidebar; smaller supported terminals show section tabs. Undersized terminals ask you to resize while keeping progress.
 
 Browser prompts wrap across several lines. Press **E** to read the complete current message; **↑/↓**, **Page Up/Down**, **Home/End** scroll it and **E/Esc** returns. Run controls remain available in that view. Messages longer than the footer explicitly offer Full message instead of silently truncating the reason or controls. The details view closes when that browser step changes or completes.
+
+## Collect public contact details with Firecrawl
+
+Save your Firecrawl key locally before starting the TUI:
+
+```bash
+bismyth-leads firecrawl-login
+bismyth-leads
+```
+
+The key prompt is hidden and makes no network request. It saves the key in `credentials/firecrawl.key` under the app's data directory, with private file and directory permissions. `FIRECRAWL_API_KEY` can supply an environment override. Keys are kept out of saved run files, exports and Codex subprocesses. `doctor` reports whether a key is configured; that is not a live access check. `BISMYTH_FIRECRAWL_URL` optionally selects another compatible HTTPS Firecrawl API endpoint, or HTTP on localhost.
+
+Start with a discovered, imported or saved property queue. Press **H**, use **↑/↓** to choose a page budget, then press **Enter** to start. The initial budget is at most ten pages; try three for a small check. **P** pauses between steps, **S** cancels remaining work, and progress is saved. Pages with an existing collected or no-contact result are skipped. The CLI accepts a budget of 1–300 pages:
+
+```bash
+bismyth-leads history
+bismyth-leads collect-contacts RUN_ID 3
+bismyth-leads export-contacts RUN_ID csv
+bismyth-leads export-contacts RUN_ID json
+```
+
+Without a number, `collect-contacts` defaults to ten pages. Ctrl+C stops that CLI pass and preserves completed results. The CLI uses the same data-directory lock as the TUI, so close the TUI before running collection in another terminal.
+
+Firecrawl requests public Markdown and links. Local parsing extracts complete Indian mobile numbers, email addresses and public WhatsApp links; Codex then classifies the existing candidates through your ChatGPT subscription. Each contact retains its source URL, quoted evidence and observation time. Numbers are normalized and deduplicated across listings while their source attributions are retained. Explicit owner, broker, developer, sales or agency evidence can approve a candidate; uncertain attribution remains **needs-review**. Review the evidence with **E** before using **A** to approve it manually. Email addresses remain exportable and are not WhatsApp recipients.
+
+Firecrawl uses its own key and scrape allowance; Codex classification consumes your Codex account usage. The app does not request Firecrawl's AI JSON extraction. Public contact values and their evidence are supplied to Codex for classification. Hidden or masked numbers are not reconstructed, login pages and security challenges are reported, and a blocked page is not treated as a contact. Rate-limit, credit and credential failures stop the remaining provider requests without automatic retries.
+
+Contact collection and portal enquiries have separate results. A missing public number does not prevent a Playwright interest request, and an interest confirmation does not count as an extracted contact. Firecrawl uses the listings already in your queue; it does not add new portal discovery adapters, private inbox access or website login support. Square Yards, Magicbricks, OLX and Quikr remain login-only integrations.
+
+## Connect the Baileys router and review WhatsApp introductions
+
+This package supplies the router **client**, not a Baileys server. Your router developer must deploy the external contract-v1 service, create a sender session and complete its WhatsApp pairing. The TUI does not create, reset or pair sessions. Configure these three variables in the shell that launches the TUI:
+
+| Variable | Value |
+|---|---|
+| `BISMYTH_WHATSAPP_ROUTER_URL` | Router HTTPS origin, or HTTP on localhost; no path or embedded credentials |
+| `BISMYTH_WHATSAPP_ROUTER_API_KEY` | The router's local API credential |
+| `BISMYTH_WHATSAPP_SESSION_ID` | The paired sender-session UUID supplied by the router |
+
+For example, in Bash, replace the URL and session UUID with your developer's values and enter the key at the hidden prompt:
+
+```bash
+export BISMYTH_WHATSAPP_ROUTER_URL='https://router.example'
+export BISMYTH_WHATSAPP_SESSION_ID='your-sender-session-uuid'
+read -rsp 'Router API key: ' BISMYTH_WHATSAPP_ROUTER_API_KEY
+printf '\n'
+export BISMYTH_WHATSAPP_ROUTER_API_KEY
+bismyth-leads
+```
+
+In **5 Contacts**, press **C** to check that the selected sender is connected and the router is ready. Your saved contact name and **Set up → A → WhatsApp business** supply the sender identity. The introduction asks whether the recipient is the right person, or can introduce you to the sales manager, agency owner or business head. It asks for a work number only if that person is happy to be contacted.
+
+For one approved phone contact, press **Enter**. For a batch, mark contacts with **Space**, then press **W**. Read the exact message and sender/recipient list; **E** opens full message and source evidence. **Preview only — no message sent** is selected by default and checks number availability plus the router's dry-run response. To send, reopen review, select **Send reviewed introductions** with the arrow keys, and explicitly press **Enter**. **Esc** cancels. A public phone number or successful availability check does not establish who owns the WhatsApp account or permission to contact it.
+
+The private `outreach.json` ledger saves the exact message and a unique request ID before transport. A sender/number/introduction is deduplicated across runs, including failed and uncertain attempts. Router acceptance is recorded separately from sent, delivered, read and replied states. If a response is lost, the app preserves the uncertain operation and does not resend it automatically. **U** looks up saved operations by their original IDs and fetches only outreach conversations for the current run's collected numbers; it sends no follow-up messages.
+
+Incoming replies, explicit phone numbers supplied in replies and contact-card referrals can be read in **E**. Referral numbers are recorded as evidence and are not automatically contacted. Clear STOP/unsubscribe replies mark an opt-out. Older personal messages, unrelated chats and group/broadcast activity are not imported as outreach replies. Live router connectivity, successful pairing, provider acceptance and real message delivery must be checked against your deployed service; local fixtures do not establish those outcomes.
+
+**O / Shift+O** export contacts as CSV / JSON, including their evidence and listing associations. These are separate from **X / J**, which export property enquiry results. Contact exports do not include router credentials or the private message ledger.
+
+`outreach.lock` excludes other ledger writers while a send or refresh is running. Normal completion and cancellation release it. A forcibly killed process can leave the lock behind; the error identifies its path. Confirm that the earlier process has stopped before removing that file, then use **U** to reconcile saved operations.
 
 ## Import URLs and adjust adapters
 
@@ -99,9 +173,9 @@ bismyth-leads doctor-fix             # repairs Codex, Chrome and audio setup
 bismyth-leads check-subscription     # makes one real, small decision
 ```
 
-The TUI shows the connection state at the top. Codex chooses among observed contact controls; Playwright clicks the selected control and fills the supplied contact data. Site discovery, contact values and submission confirmation remain deterministic. OTPs and required extra fields remain browser handoffs.
+The TUI shows the connection state at the top. Codex chooses among observed contact controls; Playwright clicks the selected control and fills the supplied contact data. Firecrawl contact classification chooses existing extracted IDs and must cite verbatim page evidence; it cannot add contact values. Site discovery, number parsing and submission confirmation remain deterministic. OTPs and required extra fields remain browser handoffs.
 
-Each model invocation uses `codex exec`, saved CLI auth, structured JSON output, `forced_login_method="chatgpt"`, ignored user provider configuration, a read-only sandbox and a private temporary working directory. The child environment excludes `OPENAI_API_KEY`, `CODEX_API_KEY` and API gateway overrides. Authentication failure, subscription limits or model errors produce a visible failure; there is no API-key or Laya fallback. The app never reads or copies your auth tokens.
+Each model invocation uses `codex exec`, saved CLI auth, structured JSON output, `forced_login_method="chatgpt"`, ignored user provider configuration, a read-only sandbox and a private temporary working directory. The child environment excludes `OPENAI_API_KEY`, `CODEX_API_KEY`, API gateway overrides, `FIRECRAWL_API_KEY` and the WhatsApp router credential. Authentication failure, subscription limits or model errors retain the browser handoff or public contacts needing review; there is no OpenAI API-key or Laya fallback. The app never reads or copies your auth tokens.
 
 Contact-control requests contain control labels and the task, without the contact values. CAPTCHA requests attach only the challenge panel screenshot plus the grid dimensions and already-selected tile IDs. Temporary screenshots have private permissions and are removed when the request finishes. Contact entry-point choices are bounded to the IDs observed on the page. Final enquiry submit controls are excluded from model selection. Actual decisions consume your Codex account's usage allowance; access is subject to that account's limits.
 
@@ -113,7 +187,7 @@ Sources: [official authentication guidance](https://learn.chatgpt.com/docs/auth)
 
 ## Saved data and counting
 
-Data lives at `~/.local/share/bismyth-lead-tui`, or `BISMYTH_TUI_DATA`. Configuration, runs, exports and the dedicated Chrome profile stay outside the repository. Run files are written atomically with private permissions. One TUI session can use a data directory at a time. `BISMYTH_BROWSER_PATH` overrides automatic Chrome detection.
+Data lives at `~/.local/share/bismyth-lead-tui`, or `BISMYTH_TUI_DATA`. Configuration, runs, collected contact evidence, exports, the private Firecrawl credential, `outreach.json` and the dedicated Chrome profile stay outside the repository. Run and ledger files are written atomically with private permissions. One TUI session or contact-collection CLI job can use a data directory at a time. `BISMYTH_BROWSER_PATH` overrides automatic Chrome detection.
 
 - **Prepared:** form fields filled in preview mode; no final submit click.
 - **Submitted:** a new visible portal confirmation was observed.
@@ -145,7 +219,7 @@ A checkbox tick or a transcription never counts as portal acceptance. On a dedic
 
 The previous audio helper remains packaged for compatibility and explicit injected-helper tests; it is unused by normal app runs. Its optional prerequisites are Python 3.9+, FFmpeg and `SpeechRecognition==3.17.0`, and existing `doctor-fix` setup remains available. Doctor clearly reports automatic audio as disabled. The supplied repository's source was not copied.
 
-WhatsApp automation, AI conversations, manager extraction, calling and CRM integration remain outside this package.
+The WhatsApp client sends the reviewed introduction and records replies and explicitly supplied referral numbers. Autonomous conversations, automatic referral outreach, calling, private 99acres inbox extraction and CRM integration remain outside this package. A separately deployed compatible Baileys router is required for actual WhatsApp operations.
 
 ## Verify
 
@@ -160,6 +234,6 @@ npm run build
 BISMYTH_TEST_SUBSCRIPTION_VISION=1 node --test dist/tests/captcha.test.js
 ```
 
-Tests cover validation, persistence, duplicate prevention, cancellation, pause/resume, conservative recovery, subscription environment isolation, guided UI rendering, API pagination and timeout handling, and real headless Chromium against local property-form and API-discovery fixtures. Use a supported Node runtime for the test command. Verification reports are in `docs/reports/`.
+Tests cover validation, persistence, duplicate prevention, cancellation, pause/resume, conservative recovery, subscription environment isolation, guided UI rendering, API pagination and timeout handling, and real headless Chromium against local property-form and API-discovery fixtures. Contact tests use offline Firecrawl/Codex/router fixtures to exercise public evidence validation, dry-run defaults, durable send identities, uncertain outcomes, receipts, replies, opt-outs and contact exports. They do not establish live scraping access or real WhatsApp delivery. Use a supported Node runtime for the test command. Verification reports are in `docs/reports/`.
 
 The application code is MIT licensed. The bundled India location data is separately available under the Open Database License; see `data/README.md` and `data/LICENSE-ODbL.txt`.

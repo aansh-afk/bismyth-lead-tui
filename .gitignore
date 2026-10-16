@@ -2,3 +2,18 @@ node_modules/
 dist/
 .data/
 *.tgz
+
+# Local credentials and browser/run data never belong in Git.
+.env
+.env.*
+!.env.example
+credentials/
+*.key
+accounts.json
+config.json
+outreach.json
+outreach.lock
+session.lock
+runs/
+chrome-profile/
+releases/

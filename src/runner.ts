@@ -4,6 +4,7 @@ import type {Driver, Handoff} from './browser.js';
 import {duplicateKey} from './model.js';
 import type {Project, ProjectStatus, Run} from './model.js';
 import {Store} from './store.js';
+import type {FirecrawlClient} from './firecrawl.js';
 
 export class RunStopped extends Error { constructor() { super('Run stopped.'); } }
 export class Runner extends EventEmitter {
@@ -122,6 +123,50 @@ export class Runner extends EventEmitter {
       await this.checkpoint();
       this.run.state = 'ready';
       await this.record('Queue ready: ' + this.run.projects.length + '/' + this.run.config.limit + ' projects.');
+    });
+  }
+  async collectContacts(client: Pick<FirecrawlClient, 'assertConfigured' | 'capture'>, maximumRequests = 10): Promise<void> {
+    // Preflight before changing a run, so a missing credential never starts a job.
+    client.assertConfigured();
+    if (!Number.isInteger(maximumRequests) || maximumRequests < 1 || maximumRequests > 300) throw new Error('Choose 1–300 contact pages.');
+    const previousState = this.run.state;
+    await this.execute(async () => {
+      this.run.state = 'enriching';
+      await this.record(`Collecting public contacts with Firecrawl · at most ${maximumRequests} pages. Portal enquiries are unchanged.`);
+      let requested = 0;
+      for (const item of this.run.projects) {
+        await this.checkpoint();
+        if (requested >= maximumRequests) break;
+        if (item.contactCapture && ['captured', 'not-found'].includes(item.contactCapture.status)) continue;
+        const retained = item.contactCapture?.contacts || [];
+        item.contactCapture = {status: 'working', attemptedAt: new Date().toISOString(), detail: 'Reading the public listing with Firecrawl.', contacts: retained};
+        await this.record(`${item.site}: collecting public contact details (${++requested}/${maximumRequests}).`);
+        try {
+          const capture = await client.capture({url: item.url, title: item.title}, this.controller.signal);
+          await this.checkpoint();
+          item.contactCapture = capture;
+          if (!capture.contacts.length && ['blocked', 'failed'].includes(capture.status)) item.contactCapture.contacts = retained;
+          await this.record(`${item.site}: ${capture.detail}`);
+          if (capture.stopBatch) { await this.record('Contact pass stopped at the provider limit. Remaining pages were not requested.'); break; }
+        } catch (error) {
+          item.contactCapture = {status: 'failed', attemptedAt: new Date().toISOString(), detail: this.stopped ? 'Contact collection stopped; prior evidence retained.' : 'Contact collection failed; prior evidence retained.', contacts: retained};
+          await this.store.save(this.run);
+          if (this.stopped || this.controller.signal.aborted) throw new RunStopped();
+          await this.record(`${item.site}: contact collection failed; portal enquiry status was retained.`);
+          if ((error as Error).name === 'FirecrawlConfigurationError') break;
+        }
+      }
+      this.run.state = previousState === 'complete' ? 'complete' : 'ready';
+      await this.record(`Contact pass finished after ${requested} public page requests. 5 opens contacts; portal enquiries remain available.`);
+    });
+  }
+  async workflow(label: string, task: (signal: AbortSignal, checkpoint: () => Promise<void>, progress: (message: string) => Promise<void>) => Promise<void>): Promise<void> {
+    const previousState = this.run.state;
+    await this.execute(async () => {
+      this.run.state = 'messaging'; await this.record(label);
+      await task(this.controller.signal, () => this.checkpoint(), message => this.record(message));
+      await this.checkpoint(); this.run.state = previousState === 'complete' ? 'complete' : 'ready';
+      await this.record('WhatsApp task finished. Enquiry counts were not changed.');
     });
   }
   private async mark(item: Project, status: ProjectStatus, detail: string): Promise<void> {

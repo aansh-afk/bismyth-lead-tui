@@ -1,5 +1,6 @@
 import {createHash, randomUUID} from 'node:crypto';
 import {stateForCity, validLocation} from './locations.js';
+import type {ContactCapture} from './contacts.js';
 
 export const sites = ['99acres', 'nobroker', 'housing'] as const;
 export type Site = typeof sites[number];
@@ -10,20 +11,22 @@ export interface Config {
   browserPath: string; seedUrls: string[]; adapterFile: string;
   layaEndpoint: string;
   extraFields: Record<string, string>;
+  senderBusiness?: string;
 }
 export interface Project {
   id: string; site: Site; title: string; url: string; status: ProjectStatus;
   detail: string; updatedAt: string;
+  contactCapture?: ContactCapture;
 }
 export interface Run {
   version: 1; id: string; createdAt: string; updatedAt: string;
-  state: 'ready' | 'discovering' | 'running' | 'paused' | 'stopped' | 'complete';
+  state: 'ready' | 'discovering' | 'running' | 'enriching' | 'messaging' | 'paused' | 'stopped' | 'complete';
   config: Config; projects: Project[]; events: {at: string; message: string}[];
 }
 export const defaults: Config = {
   stateCode: '', city: '', intent: 'buy', name: '', email: '', phone: '', sites: [...sites],
   limit: 100, delayMs: 3000, mode: 'preview', browserPath: '', seedUrls: [],
-  adapterFile: '', extraFields: {}, layaEndpoint: '',
+  adapterFile: '', extraFields: {}, layaEndpoint: '', senderBusiness: 'Bismyth',
 };
 export function validateConfig(config: Config, contact = true): string[] {
   const errors: string[] = [];
@@ -64,6 +67,12 @@ export function createRun(config: Config): Run {
   const now = new Date().toISOString();
   return {version: 1, id: randomUUID(), createdAt: now, updatedAt: now, state: 'ready', config: structuredClone(config), projects: [], events: []};
 }
+/** Copy queue entries without throwing away independently collected contacts. */
+export function copyProject(item: Project): Project {
+  const copy = project(item.site, item.title, item.url);
+  if (item.contactCapture) copy.contactCapture = structuredClone(item.contactCapture);
+  return copy;
+}
 export function contactKey(config: Config): string {
   const digits = config.phone.replace(/\D/g, '');
   const phone = digits.length === 12 && digits.startsWith('91') ? digits.slice(2) : digits;
@@ -81,6 +90,10 @@ export function recoverRun(run: Run): Run {
   for (const item of run.projects) if (item.status === 'working') {
     item.status = 'uncertain'; item.detail = 'Interrupted while processing; inspect before retrying.';
   }
-  if (['running', 'discovering', 'paused'].includes(run.state)) run.state = 'stopped';
+  for (const item of run.projects) if (item.contactCapture?.status === 'working') {
+    item.contactCapture.status = 'failed';
+    item.contactCapture.detail = 'Contact collection interrupted. Existing evidence was retained; H can retry.';
+  }
+  if (['running', 'discovering', 'enriching', 'messaging', 'paused'].includes(run.state)) run.state = 'stopped';
   return run;
 }
