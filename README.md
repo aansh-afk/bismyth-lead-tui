@@ -6,10 +6,10 @@ Interactive terminal app for property enquiry batches and public seller contacts
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.15** from the GitHub release:
+Install **v0.1.16** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.15/bismyth-lead-tui-0.1.15.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.16/bismyth-lead-tui-0.1.16.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.15/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.16/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -51,9 +51,11 @@ Launch `bismyth-leads`. The first **Set up** page starts with **Website logins**
 
 Choose your **State / UT**, then choose the city from its India-only list. Enter your contact details and type **3** in Batch size. Press **F**, review the discovered properties, press **Enter**, and choose **Test forms**. Press **C** after browser handoffs, **K** to skip or **S** to stop. Test forms skips the final submit step; a logged-in site's contact entry point can itself initiate a portal action.
 
-Website login setup covers 99acres, NoBroker, Housing, Square Yards, Magicbricks, OLX and Quikr. The latter four currently have **login only**; saving their sessions does not add a listing/enquiry adapter. Saved observations say **Last verified**, not that a session is still authenticated. Login checks do not reload the page, submit credentials or invoke AI/CAPTCHA automation. Browser cookies stay in the private persistent profile; `accounts.json` stores only portal status and observation times. Skipping preserves existing browser data. **N** can continue with available or guest sessions.
+Website login setup covers 99acres, NoBroker, Housing, Square Yards, Magicbricks, OLX and Quikr. The latter four currently have **login only**; saving their sessions does not add a listing/enquiry adapter. Saved observations say **Last verified**, not that a session is still authenticated. Login checks do not reload the page, submit credentials or invoke AI/CAPTCHA automation. Browser cookies stay in the private persistent profile; `accounts.json` stores only portal status and observation times. Skipping preserves existing browser data. **N** continues to the profile editor; discovery and URL imports use only selected listing websites whose latest TUI observation is **signed in**. Unconfirmed, signed-out, blocked, skipped and unchecked sites are excluded. If none qualify, the app returns to website logins without starting discovery. Saved website preferences are retained; activity and notices identify skipped sites. A recorded observation is not a guarantee that a session cannot expire later.
 
 NoBroker checks recognise its signed-in profile icon even while the hover menu is closed. After signing in, select NoBroker in Set up and press **C**: a confirmed session shows **NoBroker login successful** in green. The check does not open the menu, click Sign Out or read account values.
+
+Housing checks recognise its authenticated account popover and the plain **Log Out** control on `/user-profile/edit-profile`, together with profile navigation. Quikr checks recognise its authenticated **MyQuikr** account control and mobile logout control; hidden guest-menu logout markup does not count. If either remains unconfirmed, open the account menu or Housing profile page in the same Chrome tab and press **C**. A profile URL, cookie or bare avatar alone never establishes login.
 
 For development tests against a local fixture, clone the repository and run `npm ci && npm test`. These do not send real portal enquiries.
 
@@ -69,11 +71,11 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.15.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.16.tgz`. A local build does not publish a GitHub or npm release.
 
 ## Guided workflow
 
-1. **Set up:** connect website accounts first, then **N** continues to the profile. Choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties after the account step is reviewed and all required details are complete. **L** or the Website logins field returns to account setup.
+1. **Set up:** connect website accounts first, then **N** continues to the profile. Choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties only on selected websites with confirmed logins, after the required profile details are complete. **L** or the Website logins field returns to account setup.
 2. **Review queue:** discovery brings you here automatically. Scroll the properties, then press **Enter**. Choose **Test forms** to prepare forms without the final submit step, or **Send enquiries** to submit your supplied contact details. The dialog shows the queue size, location, name and phone before starting.
 3. **Run & results:** follow progress and activity. If Chrome needs verification or extra fields, complete that browser step and press **C**. **K** skips it, **P** pauses/resumes, and **S** stops and saves progress. Results distinguish confirmed enquiries from tested forms and uncertain outcomes.
 4. **Saved runs:** Enter loads a previous run. **X** exports CSV; **J** exports JSON. **Q** saves progress and exits.
@@ -156,7 +158,7 @@ Saved activity reports API properties, request counts and decoded JSON bytes. If
 
 Live verification on this machine returned 51 unique NoBroker listings in two anonymous API requests. Housing's GraphQL query worked through the browser and curl, but the app's direct Node request timed out; its 15-second fallback was verified. Other cities and rental searches have fixture coverage only where specified in the verification reports.
 
-Set **Import URL file** to a text file (one URL per line, `#` comments allowed) or a JSON string array. Press **i** for direct project URLs; press **d** to discover listings from imported search-result URLs. Imported links must belong to the supported portals and selected sites.
+Set **Import URL file** to a text file (one URL per line, `#` comments allowed) or a JSON string array. Press **i** for direct project URLs; press **d** to discover listings from imported search-result URLs. Imported links must belong to supported selected portals with confirmed logins; URLs from other sites are excluded.
 
 The examples directory contains inspected public Pune project URLs and an adapter override file. Paths are relative to the directory from which you launch the app.
 

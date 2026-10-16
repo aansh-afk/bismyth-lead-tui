@@ -11,7 +11,7 @@ import {messageDetailLayout, renderView} from './terminal-view.js';
 import {subscriptionStatus} from './subscription.js';
 import {indiaStates, citiesForState} from './locations.js';
 import {AccountBrowser} from './account-browser.js';
-import {blankAccounts, portalAccounts} from './accounts.js';
+import {blankAccounts, discoveryAccess, portalAccounts} from './accounts.js';
 import type {AccountSnapshot, PortalAccount} from './accounts.js';
 import {FirecrawlClient} from './firecrawl.js';
 import {firecrawlKey} from './credentials.js';
@@ -31,7 +31,7 @@ const fields: Field[] = [
   {key: 'name', label: 'Contact name', hint: 'Name supplied to the property form'},
   {key: 'email', label: 'Email', hint: 'Contact email address'},
   {key: 'phone', label: 'Phone', hint: 'Phone number; +91 is supported'},
-  {key: 'sites', label: 'Websites', hint: 'Comma separated: 99acres,nobroker,housing'},
+  {key: 'sites', label: 'Websites', hint: 'Selected websites with confirmed logins only: 99acres,nobroker,housing'},
   {key: 'limit', label: 'Batch size', hint: '1–300 projects; meeting target is 100–300'},
   {key: 'mode', label: 'Run mode', hint: 'preview fills forms; submit clicks the final submit control'},
   {key: 'delayMs', label: 'Delay (ms)', hint: '0–60000 milliseconds between projects'},
@@ -365,7 +365,9 @@ export class TerminalApp {
   }
   private async importQueue(): Promise<void> {
     if (!this.config.seedUrls.length) throw new Error('Set an Import URL file in Setup first.');
-    const run = createRun(this.config);
+    const {config, skipped} = this.discoveryConfig();
+    if (!config.seedUrls.length) throw new Error('The import has no URLs from selected websites with confirmed logins. Check website logins or choose a different URL file.');
+    const run = createRun(config);
     const seen = new Set<string>();
     const definitions = await loadAdapters(this.config.adapterFile);
     for (const url of this.config.seedUrls) {
@@ -376,15 +378,35 @@ export class TerminalApp {
       if (!seen.has(item.id) && run.projects.length < run.config.limit) { run.projects.push(item); seen.add(item.id); }
     }
     this.current = run; await this.store.save(run); this.screen = 1; this.selected[1] = 0;
-    this.notice = 'Imported ' + run.projects.length + ' URLs. Use d instead for search-result URLs.';
+    this.notice = 'Imported ' + run.projects.length + ' URLs from verified websites. Use d instead for search-result URLs.' + this.skippedSitesNotice(skipped);
+  }
+  private skippedSitesNotice(skipped: Site[]): string {
+    return skipped.length ? ' Skipped without confirmed login: ' + skipped.map(site => portalAccounts.find(portal => portal.id === site)!.label).join(', ') + '.' : '';
+  }
+  private discoveryConfig(): {config: Config; skipped: Site[]} {
+    const {allowed, skipped} = discoveryAccess(this.config.sites, this.accounts);
+    if (!allowed.length) {
+      this.screen = 0; this.accountSetup = true; this.advanced = false;
+      this.accountSelected = Math.max(0, portalAccounts.findIndex(portal => portal.id === this.config.sites[0]));
+      const loginOnly = portalAccounts.filter(portal => !portal.integrated && this.accounts.accounts.some(account => account.portal === portal.id && account.status === 'signed-in')).map(portal => portal.label);
+      throw new Error('No selected property website has a confirmed login. Open a website with Enter, log in, then C verifies it. Discovery needs NoBroker, Housing or 99acres.'
+        + (loginOnly.length ? ' ' + loginOnly.join(', ') + ' currently supports login only; no property discovery adapter is available.' : ''));
+    }
+    return {config: {...this.config, sites: allowed, seedUrls: this.config.seedUrls.filter(url => { const site = siteForUrl(url); return site !== undefined && allowed.includes(site); })}, skipped};
   }
   private async launch(discover: boolean): Promise<void> {
+    if (this.closing) return;
     if (!this.ensureAccountsReviewed()) return;
     await this.accountBrowser?.close();
+    if (this.closing) return;
+    let skipped: Site[] = [];
     if (discover) {
       const errors = validateConfig(this.config);
       if (errors.length) { this.screen = 0; this.advanced = false; throw new Error('Complete your setup first. ' + errors.join(' ')); }
-      this.current = createRun(this.config); await this.store.save(this.current);
+      const access = this.discoveryConfig(); skipped = access.skipped;
+      this.current = createRun(access.config);
+      this.current.events.push({at: new Date().toISOString(), message: 'Discovery limited to confirmed logins: ' + access.config.sites.join(', ') + '.' + this.skippedSitesNotice(skipped)});
+      await this.store.save(this.current);
     }
     if (!this.current || !discover && !this.current.projects.length) throw new Error('Discover or import projects before starting a run.');
     const errors = validateConfig(this.current.config, !discover);
@@ -392,10 +414,10 @@ export class TerminalApp {
     this.animationFrame = 0; this.startedAt = Date.now(); this.elapsedMs = 0;
     this.runner = new Runner(this.current, this.store, new PortalBrowser(this.store.directory));
     this.runner.on('change', this.render); this.screen = 2;
-    this.notice = discover ? 'Discovering projects in Chrome…' : 'Processing saved queue in ' + this.current.config.mode + ' mode…';
+    this.notice = discover ? 'Discovering on verified websites: ' + this.current.config.sites.join(', ') + '.' + this.skippedSitesNotice(skipped) : 'Processing saved queue in ' + this.current.config.mode + ' mode…';
     this.task = (discover ? this.runner.discover() : this.runner.process()).then(async () => {
       this.history = await this.store.history(); this.selected[2] = Math.max(0, (this.current?.events.length || 0) - 1);
-      if (discover) { this.screen = 1; this.selected[1] = 0; this.notice = this.current?.projects.length ? 'Properties found. Review the list, then press Enter to choose a test or live run.' : 'No properties found. Check your city or import project URLs in Advanced settings.'; }
+      if (discover) { this.screen = 1; this.selected[1] = 0; this.notice = (this.current?.projects.length ? 'Properties found. Review the list, then press Enter to choose a test or live run.' : 'No properties found. Check your city or import project URLs in Advanced settings.') + this.skippedSitesNotice(skipped); }
       this.render();
     });
   }
@@ -494,7 +516,7 @@ export class TerminalApp {
   private ensureAccountsReviewed(): boolean {
     if (this.accountsReviewed) return true;
     this.screen = 0; this.accountSetup = true; this.advanced = false; this.help = false;
-    this.notice = 'Connect your website accounts first, or press N to continue with available/guest sessions.';
+    this.notice = 'Connect your website accounts first. N continues to your profile; discovery uses only confirmed logins.';
     return false;
   }
   private render = (): void => {

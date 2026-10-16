@@ -1,3 +1,5 @@
+import type {Site} from './model.js';
+
 export const accountPortalIds = ['99acres', 'nobroker', 'housing', 'squareyards', 'magicbricks', 'olx', 'quikr'] as const;
 export type AccountPortal = typeof accountPortalIds[number];
 export type AccountStatus = 'unchecked' | 'signed-in' | 'signed-out' | 'unknown' | 'blocked' | 'skipped';
@@ -44,4 +46,15 @@ export function normalizeAccounts(value: unknown): AccountSnapshot {
     account.detail = accountStatusDetails[account.status];
   }
   return result;
+}
+
+/** Discovery uses only supported portals with a recorded signed-in observation. */
+export function discoveryAccess(selected: readonly Site[], snapshot: AccountSnapshot): {allowed: Site[]; skipped: Site[]} {
+  const signedIn = new Set(normalizeAccounts(snapshot).accounts.filter(account => account.status === 'signed-in').map(account => account.portal));
+  const allowed: Site[] = [];
+  const skipped: Site[] = [];
+  for (const site of new Set(selected)) {
+    (signedIn.has(site) && portalAccounts.some(account => account.id === site && account.integrated) ? allowed : skipped).push(site);
+  }
+  return {allowed, skipped};
 }

@@ -191,11 +191,30 @@ export class AccountBrowser {
           return [...icon.querySelectorAll('#profile-menu-dropdown *')].some(node => /^sign\s*out$/i.test(label(node)));
         });
         const noBrokerLogin = portal === 'nobroker' && [...document.querySelectorAll('#navheaderContainer div, header div')].some(node => visible(node) && loginLabel.test(label(node)));
-        const signedOut = noBrokerLogin || texts.some(text => loginLabel.test(text)) || [...document.querySelectorAll('input[type="password"], input[autocomplete="one-time-code"]')].some(visible);
+        // Quikr changes the guest entry's ID and dropdown target after login.
+        // Its hidden dashboard/logout markup is present for guests too.
+        const quikrProfile = portal === 'quikr' && [...document.querySelectorAll('#loggedInMyAc[data-togg="dropdown"][data-area="dashboardMenu"], #hamLogoutLink')].some(visible);
+        const quikrLogin = portal === 'quikr' && [...document.querySelectorAll('#loginLink, #hamLoginLink')].some(node => visible(node) && /^(?:log\s*in\s*\/\s*register|log\s*in|sign\s*in)$/i.test(label(node)));
+        // Housing's authenticated Log Out controls are plain divs, rather than
+        // semantic buttons/links. Restrict them to its known account UI.
+        const housingPopover = portal === 'housing' && [...document.querySelectorAll('.T_bottomLinksContainerStyle .T_itemStyle[data-icon="logOut2"]')].some(node => visible(node) && /^log\s*out$/i.test(label(node)));
+        const housingHeader = portal === 'housing' && [...document.querySelectorAll('.T_subContainerStyle')].some(node => {
+          const edit = node.nextElementSibling;
+          return visible(node) && [...node.querySelectorAll('.T_HelloWrapper')].some(visible)
+            && edit !== null && edit.matches('button.T_editBtnStyle') && visible(edit) && /^edit$/i.test(label(edit));
+        });
+        const housingProfile = portal === 'housing' && /^\/user-profile(?:\/|$)/.test(location.pathname)
+          && [...document.querySelectorAll('a[href]')].some(node => {
+            if (!visible(node)) return false;
+            try { const url = new URL(node.getAttribute('href')!, location.href); return url.origin === location.origin && url.pathname.replace(/\/$/, '') === '/user-profile/edit-profile'; } catch { return false; }
+          })
+          && [...document.querySelectorAll('div, span')].some(node => visible(node) && /^log\s*out$/i.test(label(node)) && ![...node.children].some(child => /^log\s*out$/i.test(label(child))));
+        const housingLogin = portal === 'housing' && [...document.querySelectorAll('.T_loginBtnStyle, input[data-testid="login_input_text"]')].some(visible);
+        const signedOut = noBrokerLogin || quikrLogin || housingLogin || texts.some(text => loginLabel.test(text)) || [...document.querySelectorAll('input[type="password"], input[autocomplete="one-time-code"]')].some(visible);
         const logout = texts.some(text => /^(?:log\s*out|sign\s*out)$/i.test(text));
         const identity = headings.some(text => /^(?:signed|logged) in as\s+\S/i.test(text));
         const accountControl = texts.some(text => /^(?:my profile|edit profile|account settings)$/i.test(text));
-        return {blocked, signedOut, signedIn: noBrokerProfile || logout || (identity && accountControl && !signedOut)};
+        return {blocked, signedOut, signedIn: noBrokerProfile || quikrProfile || housingHeader || housingPopover || housingProfile || logout || (identity && accountControl && !signedOut)};
       }, portal);
       // A failed Chrome navigation can retain the requested first-party URL.
       // Clear that failure only when actual account/security UI has appeared,
