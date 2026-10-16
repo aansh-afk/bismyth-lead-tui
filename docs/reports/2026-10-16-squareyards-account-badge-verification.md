@@ -35,3 +35,9 @@ Local Chromium fixtures use only loopback iframe resources. Twenty-seven cases c
 ## Limits
 
 The user's authenticated browser session has not been directly inspected or changed. After updating, restart the TUI and press C for Square Yards on the existing account page. Actual challenges remain manual browser steps. No live enquiries, Firecrawl scrapes, WhatsApp sends or account submissions were performed. Saved profiles, keys and runs must remain unchanged across installation.
+
+## Public release and laptop update
+
+Source commit: `28f1656`. Public release: https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.17 . Anonymous download matched the recorded SHA-256. The pinned public installer updated `/home/aansh/.local`; the installed command returned `0.1.17`, and its account observer JavaScript matches the tested release build. All 18 saved profile/account/run/credential files remained byte-for-byte unchanged. Source, tests, docs and the archive were synchronized to the local TUI workspace.
+
+The currently running TUI must be quit and reopened to load this update. In website logins, select Square Yards, Enter opens the retained session, and C verifies the page. A successful private live-account check remains for the user to perform.
