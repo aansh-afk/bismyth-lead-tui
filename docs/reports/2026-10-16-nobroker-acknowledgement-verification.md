@@ -20,7 +20,7 @@ All booking/enquiry/contact operations in tests use local synthetic fixtures. No
 
 ## Results
 
-Both new screenshot regressions were run against the preserved v0.1.20 detector before the fix: **two failed as expected**, six unrelated helper tests were skipped, and the run took **3.462 seconds**. The patched compiled detector was restored before the full configured regression list began. The full configured regression suite passed **367/367**, with zero failures/cancellations/skips, in **143.278 seconds**. Both TypeScript builds, installer shell syntax and git whitespace checks passed. Package checks are below; installed-command verification is pending.
+Both new screenshot regressions were run against the preserved v0.1.20 detector before the fix: **two failed as expected**, six unrelated helper tests were skipped, and the run took **3.462 seconds**. The patched compiled detector was restored before the full configured regression list began. The full configured regression suite passed **367/367**, with zero failures/cancellations/skips, in **143.278 seconds**. Both TypeScript builds, installer shell syntax and git whitespace checks passed. Package and installed-command checks passed as recorded below.
 
 ## Limits
 
@@ -28,4 +28,8 @@ Unknown portal responses remain uncertain and are not automatically retried. Act
 
 ## Package
 
-The archive contains 39 files and 125659 bytes. Compiled JavaScript matches both built checkouts. Tests, source maps, private configuration, account observations and browser-profile directories are excluded. The actual saved Firecrawl key and user-provided example contact occur zero times in package contents. SHA-256: `df69787b0f2bbf477ef692f934c3008920c34055d1a855e9b3249cbe55d14008`. Public release and installed-command verification are pending.
+The archive contains 39 files and 125659 bytes. Compiled JavaScript matches both built checkouts. Tests, source maps, private configuration, account observations and browser-profile directories are excluded. The actual saved Firecrawl key and user-provided example contact occur zero times in package contents. SHA-256: `df69787b0f2bbf477ef692f934c3008920c34055d1a855e9b3249cbe55d14008`. Source commit: `bddea5c`. [Release v0.1.21](https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.21) and its annotated tag were pushed successfully. The archive was downloaded anonymously from the public release and matched the SHA-256 above. The pinned public installer passed shell syntax validation and installed under `/home/aansh/.local`; the command on PATH resolves to `/home/aansh/.local/bin/bismyth-leads` and reports `0.1.21`. All 39 installed files match the verified archive byte for byte.
+
+A fresh snapshot immediately before installation compared 23 saved files, including configuration, account observations, root/run JSON and CSV data, and the Firecrawl credential. Hashes and permissions were unchanged, with zero added files. Existing website selections and contact details were retained. No user TUI or Chrome process was terminated or reloaded.
+
+The installed command passed a real 120×40 pseudo-terminal check with synthetic temporary data: Ctrl+R opened the chooser without returning to Setup, Escape cancelled and allowed reopening, Q exited with code zero, fixture JSON was unchanged and no browser started. Quit and reopen an existing TUI to load the installed code. Existing uncertain entries are preserved and are not rebooked automatically.
