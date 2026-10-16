@@ -59,6 +59,7 @@ function footerControls(view: View, noticeContinues: boolean): string {
   const paused = view.active && view.run?.state === 'paused';
   if (view.screen === 0 && view.accountSetup) return view.accountSetup.busy ? 'Please wait for Chrome  Q Quit' : accountControls;
   if (view.handoff) return (paused ? 'Enter/P Resume  C Recheck' : 'Enter/C Recheck') + '  K Skip  S Stop  E Full message  Q Quit';
+  if (noticeContinues && view.screen === 4 && !view.active) return 'Space Toggle  B All approved  Z Clear  Enter Review  E Details  Q Quit';
   if (noticeContinues) return (paused ? 'Enter/P Resume  ' : '') + 'E Full message  S Stop & save  1–5 Sections  Q Quit';
   if (paused) return 'Enter / P Resume    S Stop & save    1–5 Change view    Q Quit';
   if (view.active) return 'P Pause    S Stop & save    1–5 Change view    Q Quit';
@@ -66,8 +67,8 @@ function footerControls(view: View, noticeContinues: boolean): string {
   if ([1, 2].includes(view.screen) && !view.run?.projects.length) return 'Ctrl+R Find properties    1 Set up    1–5 Sections    Q Quit';
   if (view.screen === 1) return 'Enter / Ctrl+R Choose test or send  H Collect contacts  5 Contacts  X Export  Q Quit';
   if (view.screen === 2) return 'Enter / Ctrl+R Review queue  H Collect contacts  5 Contacts  X Export  Q Quit';
-  if (view.screen === 4) return 'H Collect  Space Select  A Approve  Enter Review  W Batch  C Router  U Replies  O Export  E Evidence  Q Quit';
-  return 'Enter Load run    X Export CSV    J Export JSON    1–5 Sections    ? Help    Q Quit';
+  if (view.screen === 4) return 'Space Toggle  B All approved  Z Clear  Enter/W Review  A Approve  H Collect  C Router  U Replies  O Export  E Evidence  Q Quit';
+  return 'Enter Load run    W Choose recipients    X CSV    J JSON    1–5 Sections    ? Help    Q Quit';
 }
 export function messageDetailLayout(view: Pick<View, 'width' | 'height' | 'handoff' | 'notice' | 'details'> & Partial<Pick<View, 'active' | 'run' | 'screen' | 'accountSetup'>>): {lines: string[]; pageSize: number; maxOffset: number; offset: number} {
   const width = Math.max(20, view.width); const height = Math.max(8, view.height); const compact = width < 70 || height < 22;
@@ -139,7 +140,7 @@ export function renderView(view: View): string {
   const count = run ? counts(run) : undefined;
   if (view.help) {
     add('Keyboard guide', ansi.bright); add('');
-    for (const text of ['1–5 or Tab   Change section', '↑ / ↓        Move selection', 'Enter        Edit / review / continue browser prompt / resume', 'L            Website logins inside Set up', 'Ctrl+R       Find properties or review the current queue', 'F            Find properties from your setup', 'A            Show or hide advanced settings', 'P            Pause or resume the browser', 'C / K        Check login / skip, or continue a run browser step', 'N            Continue from website logins to your profile', 'E            Read the full current message', 'S            Stop and save progress', 'H / 5        Collect public contacts / open Contacts', 'O / Shift+O  Export contacts CSV / JSON', 'W / U        Review WhatsApp batch / refresh replies', 'X / J        Export enquiry CSV / JSON', 'Q            Save progress and quit']) add(text);
+    for (const text of ['1–5 or Tab   Change section', '↑ / ↓        Move selection', 'Enter        Edit / review / continue browser prompt / resume', 'L            Website logins inside Set up', 'Ctrl+R       Find properties or review the current queue', 'F            Find properties from your setup', 'A            Show or hide advanced settings', 'P            Pause or resume the browser', 'C / K        Check login / skip, or continue a run browser step', 'N            Continue from website logins to your profile', 'E            Read the full current message', 'S            Stop and save progress', 'H / 5        Collect public contacts / open Contacts', 'O / Shift+O  Export contacts CSV / JSON', 'Space / B / Z Toggle recipient / all approved / clear', 'W / U        Saved-run recipients or batch / refresh replies', 'X / J        Export enquiry CSV / JSON', 'Q            Save progress and quit']) add(text);
   } else if (view.screen === 0 && view.accountSetup) {
     add('Set up · Website logins', ansi.bright);
     for (const line of wrap('Enter opens Chrome. C checks its current page.', area)) add(line, ansi.faint);
@@ -223,13 +224,15 @@ export function renderView(view: View): string {
     add('Router: ' + (view.routerStatus || 'Not configured'), ansi.faint);
     add(`${contacts.length} unique contacts · ${contacts.filter(contact => contact.review === 'approved').length} approved · ${contacts.filter(contact => view.contactSelection?.includes(contact.id)).length} selected`, ansi.cyan);
     const captured = run?.projects.filter(item => item.contactCapture && item.contactCapture.status !== 'working').length || 0;
-    add(`${captured}/${run?.projects.length || 0} pages checked · enquiry counts stay separate`, ansi.faint);
+    add(run ? `Run ${run.id.slice(0, 8)} · ${run.config.city} · ${captured}/${run.projects.length} pages checked` : '4 Saved runs → W chooses recipients for a saved run', ansi.faint);
+    add('Space toggles · B all approved · Z clear · Enter reviews', ansi.faint);
+    add('Only checked recipients will be messaged.', ansi.cyan);
     if (!contacts.length) {
       add('Confirmed interests collect revealed portal contacts.');
       add('H optionally checks public listings with Firecrawl.');
       add('Hidden/masked numbers remain unavailable.', ansi.faint);
     } else {
-      const available = Math.max(1, maxBody - 9); const selected = view.selected[4] || 0;
+      const available = Math.max(1, maxBody - 11); const selected = view.selected[4] || 0;
       const start = Math.max(0, selected - Math.floor(available / 2));
       for (const [offset, contact] of contacts.slice(start, start + available).entries()) {
         const state = view.outreach?.entries.filter(entry => entry.senderSessionId === view.senderSessionId && entry.to === contact.value).at(-1)?.status || contact.review;
@@ -239,7 +242,7 @@ export function renderView(view: View): string {
       if (contact) { add('Source: ' + [...new Set((contact.attributions || [contact]).map(source => source.visibility || 'public'))].join(' + ') + ' · ' + contact.sourceUrl, ansi.faint); add('Evidence: ' + contact.evidence + ' · E reads all', ansi.faint); }
     }
   } else {
-    add('Saved runs', ansi.bright); add('Enter loads a run. X exports CSV. Your progress is kept locally.', ansi.faint); add('');
+    add('Saved runs', ansi.bright); add('W chooses WhatsApp recipients. Enter loads the queue.', ansi.faint); add('');
     if (!view.history.length) { add('Your first run will appear here.', ansi.bright); add('Go to Set up to get started.', ansi.faint); }
     const available = Math.max(1, maxBody - 3);
     const start = Math.max(0, view.selected[3] - Math.floor(available / 2));

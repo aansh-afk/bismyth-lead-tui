@@ -169,6 +169,9 @@ test('authenticated contacts require approval and router availability; preview k
     const contact = browserContact(); const run = batch([contact]); const service = new OutreachService(store, router, sessionId);
     assert.deepEqual(await service.preview(run, contactsForRun(run)), []); assert.equal(checked.length, 0);
     contact.review = 'approved'; contact.reviewedBy = 'operator';
+    assert.deepEqual(await service.preview(run, contactsForRun(run)), [], 'approval does not select a recipient');
+    assert.equal(checked.length, 0);
+    run.outreachSelection = {contactIds: contactsForRun(run).map(item => item.id)};
     const preview = await service.preview(run, contactsForRun(run));
     assert.equal(preview.length, 1); assert.deepEqual(preview[0]!.sourceUrls, [accountUrl, listingUrl]);
     assert.equal(preview[0]!.status, 'ready'); assert.equal(previews.length, 1); assert.equal(sends, 0);

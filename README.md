@@ -6,10 +6,10 @@ Interactive terminal app for the Atlas sales funnel: share your selected callbac
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.21** from the GitHub release:
+Install **v0.1.22** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.21/bismyth-lead-tui-0.1.21.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.22/bismyth-lead-tui-0.1.22.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.21/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.22/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -71,7 +71,7 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.21.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.22.tgz`. A local build does not publish a GitHub or npm release.
 
 ## Atlas lead-intake behavior
 
@@ -88,8 +88,8 @@ OLX seller messages contain an honest Atlas business introduction and the chosen
 1. **Set up:** connect website accounts first, then **N** continues to the profile. Choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties only on selected websites with confirmed logins, after the required profile details are complete. **L** or the Website logins field returns to account setup.
 2. **Review queue:** discovery brings you here automatically. Scroll the properties, then press **Enter**. Choose **Test forms** to prepare forms without the final submit step, or **Send enquiries** to submit your supplied contact details. The dialog shows the queue size, location, name and phone before starting. E explains the Atlas funnel and exact portal-message draft. Send may create real NoBroker viewing appointments; bookings are counted separately from confirmed callback interests.
 3. **Run & results:** follow progress and activity. If Chrome needs verification or extra fields, complete that browser step and press **C**. **K** skips it, **P** pauses/resumes, and **S** stops and saves progress. Results distinguish confirmed enquiries from tested forms and uncertain outcomes.
-4. **Saved runs:** Enter loads a previous run. **X** exports CSV; **J** exports JSON. **Q** saves progress and exits.
-5. **Contacts:** **H** collects a bounded number of public listing pages with Firecrawl. **E** shows source evidence, **A** toggles approval, **Space** selects contacts, and **W** reviews the selected WhatsApp batch. **Enter** reviews just the highlighted contact. The review dialog defaults to **Preview only**; sending requires choosing **Send reviewed introductions** and pressing Enter. **C** checks the router sender; **U** reconciles saved operations and refreshes replies. **O** exports contact CSV; **Shift+O** exports contact JSON.
+4. **Saved runs:** **W** opens the highlighted run’s WhatsApp recipient picker. Enter loads its property queue. **X** exports CSV; **J** exports JSON. **Q** saves progress and exits.
+5. **Contacts:** **H** collects a bounded number of public listing pages with Firecrawl. **E** shows source evidence, **A** toggles approval, **Space** toggles a recipient, **B** selects all approved phone contacts, and **Z** clears the selection. **Enter** and **W** review only checked recipients. Choices are saved independently for each run and survive restart; old and newly copied runs start unchecked. New contacts remain unchecked. Selecting someone does not send a message. The review dialog defaults to **Preview only**; sending requires choosing **Send reviewed introductions** and pressing Enter. **C** checks the router sender; **U** reconciles saved operations and refreshes replies. **O** exports contact CSV; **Shift+O** exports contact JSON.
 
 **1–5 / Tab** change sections. **A** on Set up reveals advanced settings, including URL import, browser path, delays, adapter overrides and your **WhatsApp business** name. **?** opens the keyboard guide. You can import a project URL file with **I**, then review it with Enter. Advanced settings are optional for property enquiries.
 
@@ -150,7 +150,7 @@ bismyth-leads
 
 In **5 Contacts**, press **C** to check that the selected sender is connected and the router is ready. Your saved contact name and **Set up → A → WhatsApp business** supply the sender identity. The introduction asks whether the recipient is the right person, or can introduce you to the sales manager, agency owner or business head. It asks for a work number only if that person is happy to be contacted.
 
-For one approved phone contact, press **Enter**. For a batch, mark contacts with **Space**, then press **W**. Read the exact message and sender/recipient list; **E** opens full message and source evidence. **Preview only — no message sent** is selected by default and checks number availability plus the router's dry-run response. To send, reopen review, select **Send reviewed introductions** with the arrow keys, and explicitly press **Enter**. **Esc** cancels. A public phone number or successful availability check does not establish who owns the WhatsApp account or permission to contact it.
+In **Saved runs**, press **W** to choose that run’s recipients, or open **5 Contacts** for the loaded run. Mark the people to include with **Space**; leave everyone else unchecked. **B** selects all approved phones and **Z** clears them. Press **Enter** or **W** to review the checked recipients. Enter never substitutes the highlighted unchecked person. Each run remembers its choices. Approval alone does not select a recipient, and revoking approval removes their selection. Read the exact message and sender/recipient list; **E** opens full message and source evidence. **Preview only — no message sent** is selected by default and checks number availability plus the router's dry-run response. To send, reopen review, select **Send reviewed introductions** with the arrow keys, and explicitly press **Enter**. **Esc** cancels. A public phone number or successful availability check does not establish who owns the WhatsApp account or permission to contact it.
 
 The private `outreach.json` ledger saves the exact message and a unique request ID before transport. A sender/number/introduction is deduplicated across runs, including failed and uncertain attempts. Router acceptance is recorded separately from sent, delivered, read and replied states. If a response is lost, the app preserves the uncertain operation and does not resend it automatically. **U** looks up saved operations by their original IDs and fetches only outreach conversations for the current run's collected numbers; it sends no follow-up messages.
 

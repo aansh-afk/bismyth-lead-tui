@@ -16,7 +16,7 @@ import type {AccountSnapshot, PortalAccount} from './accounts.js';
 import {FirecrawlClient} from './firecrawl.js';
 import {firecrawlKey} from './credentials.js';
 import {choosePublicContacts} from './contact-ai.js';
-import {contactsForRun, OutreachService} from './outreach.js';
+import {contactsForRun, selectableContactsForRun, selectedContactsForRun, OutreachService} from './outreach.js';
 import type {OutreachBook} from './outreach.js';
 import type {PublicContact} from './contacts.js';
 import {portalIntroduction} from './portal-chat.js';
@@ -73,8 +73,7 @@ export class TerminalApp {
   private accountTask?: Promise<void>;
   private accountBrowser?: Pick<AccountBrowser, 'open' | 'check' | 'close'>;
   private captureReview?: number;
-  private contactReview?: {contacts: PublicContact[]; choice: number};
-  private contactSelection = new Set<string>();
+  private contactReview?: {runId: string; contacts: PublicContact[]; choice: number};
   private firecrawlStatus = 'Checking local key…';
   private routerStatus = 'Not configured';
   private outreach: OutreachBook = {version: 1, entries: [], cursors: {}};
@@ -114,7 +113,12 @@ export class TerminalApp {
       else if (key.name === 'e') { this.notice = this.introductionDetails(this.contactReview.contacts); this.details = {offset: 0, message: this.notice}; }
       else if (key.name === 'return') {
         const review = this.contactReview; this.contactReview = undefined;
-        if (review.choice < 2) void this.action(() => this.launchOutreach(review.choice === 0 ? 'preview' : 'send', review.contacts));
+        if (review.choice < 2) void this.action(async () => {
+          if (this.current?.id !== review.runId) throw new Error('The loaded run changed. Review its recipients again.');
+          const contacts = selectedContactsForRun(this.current, review.contacts);
+          if (contacts.length !== review.contacts.length) throw new Error('Recipient selection or approval changed. Review the selected recipients again.');
+          await this.launchOutreach(review.choice === 0 ? 'preview' : 'send', contacts);
+        });
       } else if (key.name === 'q') void this.shutdown();
       this.render(); return;
     }
@@ -206,17 +210,15 @@ export class TerminalApp {
     if (key.name === 'p' && this.runner?.active) { this.runner.pause(); this.render(); return; }
     if (key.name === 's' && this.runner?.active) { void this.runner.stop(); this.notice = 'Stopping task; saving progress…'; this.render(); return; }
     if (this.screen === 4 && !this.runner?.active) {
-      if (key.name === 'space') { const contact = this.current && contactsForRun(this.current)[this.selected[4]]; if (contact) this.contactSelection.has(contact.id) ? this.contactSelection.delete(contact.id) : this.contactSelection.add(contact.id); this.render(); return; }
+      if (key.name === 'space' || key.name === 'b' || key.name === 'z') { void this.action(() => this.updateContactSelection(key.name === 'space' ? 'toggle' : key.name === 'b' ? 'all' : 'none')); return; }
       if (key.name === 'a') { void this.action(() => this.approveContact()); return; }
       if (key.name === 'c' || key.name === 'u') { void this.action(() => this.launchOutreach(key.name === 'c' ? 'status' : 'refresh', this.current ? contactsForRun(this.current) : [])); return; }
       if (key.name === 'return' || key.name === 'w') {
         try {
-          const contacts = this.current ? contactsForRun(this.current) : [];
-          const chosen = key.name === 'return' ? contacts.filter((_, index) => index === this.selected[4]) : contacts.filter(contact => this.contactSelection.has(contact.id));
-          if (!chosen.length) throw new Error('Select contacts with Space, or Enter reviews the current contact.');
-          if (chosen.some(contact => contact.review !== 'approved' || contact.kind === 'email')) throw new Error('WhatsApp needs approved phone contacts. Read the source evidence with E, then A confirms a contact.');
+          const chosen = this.current ? selectedContactsForRun(this.current) : [];
+          if (!chosen.length) throw new Error('Select approved phone contacts with Space, or B selects all approved. Enter reviews only checked recipients.');
           this.introductionDetails(chosen);
-          this.contactReview = {contacts: chosen, choice: 0};
+          this.contactReview = {runId: this.current!.id, contacts: chosen, choice: 0};
         } catch (error) { this.notice = (error as Error).message; }
         this.render(); return;
       }
@@ -235,12 +237,19 @@ export class TerminalApp {
     const runShortcut = key.name === 'r';
     if ((key.name === 'return' && [1, 2].includes(this.screen) || runShortcut && this.screen !== 0) && this.current?.projects.length) { this.review = 0; this.render(); return; }
     if (key.name === 'return' && [1, 2].includes(this.screen)) { this.notice = 'Queue empty. Ctrl+R finds properties from your setup.'; this.render(); return; }
+    if (key.name === 'w' && this.screen === 3) { void this.action(async () => {
+      const saved = this.history[this.selected[3]];
+      if (!saved) throw new Error('Select a saved run first.');
+      this.current = await this.store.load(saved.id);
+      this.screen = 4; this.selected[4] = 0; this.contactReview = undefined;
+      this.notice = 'Choose WhatsApp recipients for this saved run. Space toggles, B selects approved, Z clears. Enter reviews checked recipients. Choices are saved.';
+    }); return; }
     void this.action(async () => {
       if (key.name === 'return') {
         if (this.screen === 3 && this.history[this.selected[3]]) {
           this.current = await this.store.load(this.history[this.selected[3]].id);
           this.screen = 1; this.selected[1] = 0;
-          this.notice = 'Loaded saved run. r resumes queued projects; n creates a fresh run.';
+          this.notice = 'Loaded saved run. 5 chooses WhatsApp recipients; r reviews queued projects; n creates a fresh run.';
         }
       }
       if (key.name === 'n') {
@@ -450,17 +459,38 @@ export class TerminalApp {
     return `Selected sender session: ${process.env.BISMYTH_WHATSAPP_SESSION_ID || 'Not configured'}. Recipients: ${contacts.map(contact => contact.value).join(', ')}. `
       + `Exact message: ${message} ` + contacts.map(contact => `Contact ${contact.value}: ${contact.sourceUrl}. Evidence: ${contact.evidence}`).join(' ');
   }
+  private async updateContactSelection(choice: 'toggle' | 'all' | 'none'): Promise<void> {
+    if (!this.current) throw new Error('Load a saved run or collect contacts first.');
+    const eligible = selectableContactsForRun(this.current);
+    const ids = new Set(selectedContactsForRun(this.current).map(contact => contact.id));
+    if (choice === 'all') for (const contact of eligible) ids.add(contact.id);
+    else if (choice === 'none') ids.clear();
+    else {
+      const contact = contactsForRun(this.current)[this.selected[4]];
+      if (!contact) throw new Error('No contact on this row. H collects contacts.');
+      if (!eligible.some(item => item.id === contact.id)) throw new Error('Only approved Indian phone contacts can be selected. E shows evidence; A toggles approval. Emails stay exportable.');
+      if (ids.has(contact.id)) ids.delete(contact.id); else ids.add(contact.id);
+    }
+    const next = {...this.current, outreachSelection: {contactIds: [...ids]}};
+    await this.store.save(next);
+    this.current = next; this.contactReview = undefined;
+    this.history = await this.store.history();
+    this.notice = `${ids.size} recipients selected for this run. Unchecked contacts will not be messaged. Choices saved; Enter reviews, Z clears.`;
+  }
   private async approveContact(): Promise<void> {
     if (!this.current) throw new Error('Load a run first.');
     const selected = contactsForRun(this.current)[this.selected[4]];
     if (!selected) throw new Error('Select a collected contact first.');
-    for (const item of this.current.projects) for (const contact of item.contactCapture?.contacts || []) {
+    const next = structuredClone(this.current);
+    for (const item of next.projects) for (const contact of item.contactCapture?.contacts || []) {
       if (contact.id === selected.id || contact.value === selected.value) {
         contact.review = selected.review === 'approved' ? 'needs-review' : 'approved';
         if (contact.review === 'approved') contact.reviewedBy = 'operator'; else delete contact.reviewedBy;
       }
     }
-    await this.store.save(this.current); this.contactNotice();
+    if (next.outreachSelection) next.outreachSelection = {contactIds: selectedContactsForRun(next).map(contact => contact.id)};
+    await this.store.save(next); this.current = next;
+    this.history = await this.store.history(); this.contactNotice();
   }
   private async launchContacts(maximumRequests: number): Promise<void> {
     if (this.closing) return;
@@ -481,7 +511,7 @@ export class TerminalApp {
       this.history = await this.store.history(); this.screen = 4; this.selected[4] = 0;
       if (this.current?.state === 'stopped') this.notice = this.current.events.at(-1)?.message || 'Contact collection stopped; progress saved.';
       else if (!contactsForRun(this.current!).length) this.contactNotice();
-      else this.notice = 'Contact pass saved. Enter reviews one introduction, Space selects a batch, W reviews selected contacts. O exports.';
+      else this.notice = 'Contact pass saved. New contacts are unchecked. Space selects recipients; Enter reviews checked contacts. B selects approved; Z clears. O exports.';
       this.render();
     }).catch(error => { this.notice = (error as Error).message; this.render(); });
   }
@@ -546,7 +576,7 @@ export class TerminalApp {
       notice: this.notice, help: this.help, handoff: this.runner?.handoffMessage || '',
       details: this.details,
       accountSetup: this.accountSetupView(),
-      contacts: this.current ? contactsForRun(this.current) : [], contactSelection: [...this.contactSelection],
+      contacts: this.current ? contactsForRun(this.current) : [], contactSelection: this.current ? selectedContactsForRun(this.current).map(contact => contact.id) : [],
       firecrawlStatus: this.firecrawlStatus, routerStatus: this.routerStatus, outreach: this.outreach, senderSessionId: process.env.BISMYTH_WHATSAPP_SESSION_ID,
       dialog: this.captureReview !== undefined ? {title: 'Collect public contact details', body: [`At most ${this.captureReview} public listing pages.`, 'Firecrawl scrape credits and Codex usage apply.', 'Previously collected pages are skipped.', '↑↓ changes the page budget. Portal enquiries are unchanged.'], choice: 0, options: ['Start collection'], hint: 'Enter Start · Esc Cancel'} : this.contactReview ? {
         title: 'Review WhatsApp introduction', body: [`${this.contactReview.contacts.length} recipients: ${this.contactReview.contacts.map(contact => contact.value).slice(0, 3).join(', ')}${this.contactReview.contacts.length > 3 ? ' …' : ''}`, 'Sender: ' + (process.env.BISMYTH_WHATSAPP_SESSION_ID || 'Not configured'),

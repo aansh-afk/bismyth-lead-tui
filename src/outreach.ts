@@ -39,6 +39,17 @@ function approvedPhones(contacts: PublicContact[]): PublicContact[] {
     && (contact.reviewedBy === 'operator' || ['owner', 'broker', 'developer', 'sales', 'agency'].includes(contact.role || ''))
     && normalizeIndianPhone(contact.value) === contact.value));
 }
+export function selectableContactsForRun(run: Run): PublicContact[] {
+  return approvedPhones(contactsForRun(run));
+}
+/** Selection is run-scoped; caller objects cannot replace saved contact evidence. */
+export function selectedContactsForRun(run: Run, requested = contactsForRun(run)): PublicContact[] {
+  const ids: unknown = run.outreachSelection?.contactIds;
+  if (!Array.isArray(ids) || !ids.every(id => typeof id === 'string')) return [];
+  const selected = new Set(ids);
+  const requestedIds = new Set(approvedPhones(requested).map(contact => contact.id));
+  return selectableContactsForRun(run).filter(contact => selected.has(contact.id) && requestedIds.has(contact.id));
+}
 function sourceUrls(contact: PublicContact): string[] {
   return [...new Set([contact, ...(contact.attributions ?? [])].flatMap(item => [item.sourceUrl, ...(item.listingUrl ? [item.listingUrl] : [])]))];
 }
@@ -97,9 +108,11 @@ export class OutreachService {
 
   /** Dry-run router validation never persists a pending operation or calls live send. */
   async preview(run: Run, contacts: PublicContact[], signal?: AbortSignal): Promise<OutreachPreview[]> {
+    signal?.throwIfAborted();
+    if (!selectedContactsForRun(run, contacts).length) return [];
     const message = this.#message(run); await this.#ready(signal);
     const book = await this.#store.outreach(); const result: OutreachPreview[] = [];
-    for (const contact of approvedPhones(contacts)) {
+    for (const contact of selectedContactsForRun(run, contacts)) {
       signal?.throwIfAborted();
       const item: OutreachPreview = {contactId: contact.id, to: contact.value, message, sourceUrls: sourceUrls(contact), status: 'ready', detail: 'Ready for explicit send confirmation.'};
       if (matchingEntry(book, this.#sessionId, contact.value)) {
@@ -107,6 +120,7 @@ export class OutreachService {
       }
       const availability = await this.#router.checkContact(contact.value, signal);
       if (!availability.onWhatsApp) { result.push({...item, status: 'unavailable', detail: 'This number is not available on WhatsApp.'}); continue; }
+      if (!selectedContactsForRun(run, [contact]).length) continue;
       await this.#router.preview({to: contact.value, message, clientRequestId: randomUUID()}, signal);
       result.push(item);
     }
@@ -115,16 +129,20 @@ export class OutreachService {
 
   /** Call only after the user has reviewed the exact drafts and explicitly confirmed sending. */
   async send(run: Run, contacts: PublicContact[], signal?: AbortSignal, onProgress: Progress = () => {}): Promise<OutreachEntry[]> {
+    signal?.throwIfAborted();
+    if (!selectedContactsForRun(run, contacts).length) return [];
     return this.#exclusive(async () => {
       const message = this.#message(run); await this.#ready(signal);
       const book = await this.#store.outreach(); const created: OutreachEntry[] = [];
-      for (const contact of approvedPhones(contacts)) {
+      for (const contact of selectedContactsForRun(run, contacts)) {
         signal?.throwIfAborted();
+        if (!selectedContactsForRun(run, [contact]).length) continue;
         if (matchingEntry(book, this.#sessionId, contact.value)) { await onProgress('WhatsApp introduction skipped: this sender already has a saved operation or opt-out for the contact.'); continue; }
         const availability = await this.#router.checkContact(contact.value, signal);
         if (!availability.onWhatsApp) { await onProgress('Number is not available on WhatsApp; no message sent.'); continue; }
         await onProgress('Saving the exact WhatsApp introduction and request ID before sending.');
         signal?.throwIfAborted();
+        if (!selectedContactsForRun(run, [contact]).length) continue;
         const now = new Date().toISOString();
         const entry: OutreachEntry = {senderSessionId: this.#sessionId, to: contact.value, purpose,
           clientRequestId: randomUUID(), runId: run.id, contactId: contact.id, message, sourceUrls: sourceUrls(contact),
@@ -135,6 +153,12 @@ export class OutreachService {
         try {
           await onProgress('Sending the explicitly reviewed WhatsApp draft using its saved request ID.');
           signal?.throwIfAborted();
+          if (!selectedContactsForRun(run, [contact]).length) {
+            transition(entry, 'failed');
+            await this.#store.saveOutreach(book);
+            await onProgress('Recipient selection or approval changed; the saved operation was not sent.');
+            continue;
+          }
           const response = await this.#router.send({to: entry.to, message: entry.message, clientRequestId: entry.clientRequestId}, signal);
           if (response.userId !== this.#sessionId || response.clientRequestId !== entry.clientRequestId || !response.operationId) throw new Error('Invalid send identity.');
           entry.operationId = response.operationId; entry.messageId = response.messageId;

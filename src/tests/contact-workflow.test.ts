@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtemp, readFile, rm, stat} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {setImmediate} from 'node:timers/promises';
+import {setImmediate, setTimeout as delay} from 'node:timers/promises';
 import type {Key} from 'node:readline';
 import {copyProject, createRun, defaults, project, recoverRun} from '../model.js';
 import type {Run} from '../model.js';
@@ -15,7 +15,7 @@ import {extractPublicContacts} from '../contacts.js';
 import type {ContactCapture, PublicContact} from '../contacts.js';
 import {TerminalApp} from '../tui.js';
 import {renderView} from '../terminal-view.js';
-import {contactsForRun} from '../outreach.js';
+import {contactsForRun, selectedContactsForRun} from '../outreach.js';
 import {firecrawlKey, firecrawlKeyPath, saveFirecrawlKey} from '../credentials.js';
 import {subscriptionEnvironment} from '../subscription.js';
 
@@ -133,11 +133,16 @@ test('Firecrawl and router secrets are excluded from the Codex child environment
 });
 
 interface Controller {
-  screen: number; selected: number[]; current?: Run; captureReview?: number; contactReview?: {contacts: PublicContact[]; choice: number};
+  screen: number; selected: number[]; current?: Run; history: Run[]; captureReview?: number; contactReview?: {runId: string; contacts: PublicContact[]; choice: number};
   busy: boolean; notice: string; render: () => void; task?: Promise<void>; launchContacts: (limit: number) => Promise<void>;
   launchOutreach: (action: string, contacts: PublicContact[]) => Promise<void>; keypress: (text: string | undefined, key: Key) => void;
 }
 function press(app: Controller, key: string, text = key.length === 1 ? key : undefined): void { app.keypress(text, {name: key}); }
+async function settle(app: Controller): Promise<void> {
+  const deadline = Date.now() + 5000;
+  while (app.busy && Date.now() < deadline) await delay(10);
+  assert.equal(app.busy, false, 'the pending local UI action finished');
+}
 test('H reviews a bounded collection budget and Enter starts it without a browser-login gate', async () => {
   const {store, close} = await fixture();
   try {
@@ -153,6 +158,7 @@ test('contact review defaults to dry run; explicit second choice is the only liv
   try {
     const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = queued(); app.current.projects[0].contactCapture = capture(); app.screen = 4;
     const calls: string[] = []; app.launchOutreach = async action => { calls.push(action); };
+    press(app, 'space'); await settle(app);
     press(app, 'return'); assert.equal(app.contactReview?.choice, 0); press(app, 'return'); await setImmediate(); assert.deepEqual(calls, ['preview']);
     press(app, 'return'); press(app, 'down'); press(app, 'return'); await setImmediate(); assert.deepEqual(calls, ['preview', 'send']);
   } finally { await close(); }
@@ -162,10 +168,109 @@ test('unapproved candidates require explicit operator attribution before WhatsAp
   try {
     const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = queued();
     app.current.projects[0].contactCapture = capture(); app.current.projects[0].contactCapture!.contacts[0].review = 'needs-review'; app.screen = 4;
-    press(app, 'return'); assert.equal(app.contactReview, undefined); assert.match(app.notice, /approved phone/);
-    press(app, 'a'); for (let i = 0; i < 1000 && app.busy; i++) await setImmediate();
-    assert.equal(app.busy, false);
+    press(app, 'space'); await settle(app); assert.deepEqual(selectedContactsForRun(app.current), []);
+    press(app, 'return'); assert.equal(app.contactReview, undefined); assert.match(app.notice, /Select/i);
+    press(app, 'a'); await settle(app);
     assert.equal(app.current.projects[0].contactCapture!.contacts[0].reviewedBy, 'operator');
+    assert.deepEqual(selectedContactsForRun(app.current), [], 'approval alone does not add a recipient');
+    press(app, 'space'); await settle(app); press(app, 'return');
+    const review = (app as Controller).contactReview;
+    assert.equal(review?.runId, app.current.id);
+  } finally { await close(); }
+});
+
+test('Enter and W require saved selections instead of messaging an unchecked focused contact', async () => {
+  const {store, close} = await fixture();
+  try {
+    const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = queued();
+    app.current.projects[0].contactCapture = capture(); app.screen = 4;
+    const calls: string[] = []; app.launchOutreach = async action => { calls.push(action); };
+    for (const key of ['return', 'w']) {
+      press(app, key); assert.equal(app.contactReview, undefined); assert.match(app.notice, /Select/i);
+    }
+    assert.deepEqual(calls, []); assert.deepEqual(selectedContactsForRun(app.current), []);
+    press(app, 'space'); await settle(app);
+    press(app, 'w'); assert.equal(app.contactReview?.runId, app.current.id);
+    assert.deepEqual(app.contactReview?.contacts.map(contact => contact.value), ['+919876543210']);
+    press(app, 'escape'); assert.equal(app.contactReview, undefined); assert.deepEqual(calls, []);
+  } finally { await close(); }
+});
+
+test('Space selection survives saved-run reload and stays independent across runs with the same contact', async () => {
+  const {store, close} = await fixture();
+  try {
+    const first = queued(); first.projects[0].contactCapture = capture();
+    const second = queued(); second.projects[0].contactCapture = capture();
+    await store.save(first); await store.save(second);
+    const before = structuredClone(first.projects);
+    const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = first; app.screen = 4;
+    press(app, 'space'); await settle(app);
+    assert.deepEqual(selectedContactsForRun(await store.load(first.id)).map(contact => contact.value), ['+919876543210']);
+    assert.deepEqual(first.projects, before, 'recipient selection does not change listing or contact evidence');
+    app.current = await store.load(second.id);
+    assert.deepEqual(selectedContactsForRun(app.current), []);
+    press(app, 'w'); assert.equal(app.contactReview, undefined);
+    app.current = await store.load(first.id);
+    assert.equal(selectedContactsForRun(app.current).length, 1);
+    press(app, 'space'); await settle(app);
+    assert.deepEqual(selectedContactsForRun(await store.load(first.id)), []);
+    assert.deepEqual(selectedContactsForRun(await store.load(second.id)), []);
+  } finally { await close(); }
+});
+
+test('B selects eligible phones, Z clears them, and a newly collected contact remains unchecked', async () => {
+  const {store, close} = await fixture();
+  try {
+    const run = queued(2); run.projects[0].contactCapture = capture();
+    const original = run.projects[0].contactCapture.contacts[0]!;
+    run.projects[0].contactCapture.contacts.push({...original, id: 'email', kind: 'email', value: 'seller@example.test', raw: 'seller@example.test'},
+      {...original, id: 'unreviewed', value: '+919876543211', raw: '+919876543211', review: 'needs-review'});
+    const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = run; app.screen = 4;
+    press(app, 'b'); await settle(app);
+    assert.deepEqual(selectedContactsForRun(await store.load(run.id)).map(contact => contact.value), ['+919876543210']);
+    await new Runner(app.current!, store, driver()).collectContacts({assertConfigured() {}, async capture() {
+      return {status: 'captured', attemptedAt: original.observedAt, detail: 'New synthetic owner', contacts: [{...original, id: 'new', value: '+919876543212', raw: '+919876543212'}]};
+    }}, 1);
+    assert.equal(contactsForRun(app.current!).length, 4);
+    assert.deepEqual(selectedContactsForRun(await store.load(run.id)).map(contact => contact.value), ['+919876543210']);
+    press(app, 'z'); await settle(app);
+    assert.deepEqual(selectedContactsForRun(await store.load(run.id)), []);
+    press(app, 'w'); assert.equal(app.contactReview, undefined);
+    press(app, 'b'); await settle(app);
+    assert.deepEqual(selectedContactsForRun(app.current!).map(contact => contact.value).sort(), ['+919876543210', '+919876543212']);
+  } finally { await close(); }
+});
+
+test('Saved runs W opens the highlighted run contacts with its own choices and never starts messaging', async () => {
+  const {store, close} = await fixture();
+  try {
+    const first = queued(); first.projects[0].contactCapture = capture();
+    first.outreachSelection = {contactIds: contactsForRun(first).map(contact => contact.id)};
+    const second = queued(); second.projects[0].contactCapture = capture();
+    await store.save(first); await store.save(second);
+    const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = second;
+    app.history = [first, second]; app.screen = 3; app.selected[3] = 0;
+    const calls: string[] = []; app.launchOutreach = async action => { calls.push(action); };
+    press(app, 'w'); await settle(app);
+    assert.equal(app.screen, 4); assert.equal(app.current?.id, first.id); assert.equal(app.contactReview, undefined);
+    assert.equal(selectedContactsForRun(app.current!).length, 1); assert.deepEqual(calls, []);
+    app.screen = 3; app.selected[3] = 1; press(app, 'return'); await settle(app);
+    assert.equal(app.screen, 1); assert.equal(app.current?.id, second.id);
+    assert.deepEqual(selectedContactsForRun(app.current!), []); assert.deepEqual(calls, []);
+  } finally { await close(); }
+});
+
+test('copying a selected run retains contact evidence but requires fresh recipient choices', async () => {
+  const {store, close} = await fixture();
+  try {
+    const run = queued(); run.projects[0].contactCapture = capture();
+    run.outreachSelection = {contactIds: contactsForRun(run).map(contact => contact.id)};
+    await store.save(run);
+    const app = new TerminalApp(config, store) as unknown as Controller; app.render = () => {}; app.current = run; app.screen = 1;
+    press(app, 'v'); await settle(app);
+    assert.notEqual(app.current!.id, run.id); assert.equal(contactsForRun(app.current!).length, 1);
+    assert.deepEqual(selectedContactsForRun(app.current!), []);
+    assert.equal(selectedContactsForRun(await store.load(run.id)).length, 1);
   } finally { await close(); }
 });
 test('Contacts and active collection render at supported sizes without enquiry-send labels or terminal injection', () => {

@@ -6,8 +6,9 @@ import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {Store} from '../store.js';
 import {createRun, defaults, project} from '../model.js';
-import {contactsForRun, OutreachService} from '../outreach.js';
+import {contactsForRun, OutreachService, selectableContactsForRun, selectedContactsForRun} from '../outreach.js';
 import type {OutreachBook, OutreachEntry, OutreachStorage} from '../outreach.js';
+import {deduplicateContacts} from '../contacts.js';
 import type {PublicContact} from '../contacts.js';
 import {WhatsAppRouterError} from '../whatsapp.js';
 import type {RouterEvent, RouterMessage, RouterOperation, RouterSendResult, WhatsAppDraft} from '../whatsapp.js';
@@ -18,10 +19,17 @@ const operationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const number = '+919876543210';
 const secondNumber = '+919876543211';
 const timestamp = '2026-10-15T00:00:00.000Z';
-function run() { return createRun({...structuredClone(defaults), name: 'Aansh', senderBusiness: 'Bismyth'}); }
+function run(contacts: PublicContact[] = [contact()]) {
+  const batch = createRun({...structuredClone(defaults), name: 'Aansh', senderBusiness: 'Bismyth'});
+  const listing = project('housing', 'Synthetic listing', 'https://housing.com/one');
+  listing.contactCapture = {status: 'captured', attemptedAt: timestamp, detail: 'Synthetic source evidence', contacts};
+  batch.projects = [listing];
+  batch.outreachSelection = {contactIds: contactsForRun(batch).map(item => item.id)};
+  return batch;
+}
 function contact(overrides: Partial<PublicContact> = {}): PublicContact {
-  return {id: 'public-phone', kind: 'phone', value: number, raw: number, role: 'owner', name: 'Public owner',
-    sourceUrl: 'https://example.test/one', evidence: 'Owner: ' + number, observedAt: timestamp, review: 'approved', whatsapp: 'unchecked', ...overrides};
+  return deduplicateContacts([{id: 'public-phone', kind: 'phone', value: number, raw: number, role: 'owner', name: 'Public owner',
+    sourceUrl: 'https://example.test/one', evidence: 'Owner: ' + number, observedAt: timestamp, review: 'approved', whatsapp: 'unchecked', ...overrides}])[0]!;
 }
 class MemoryStore implements OutreachStorage {
   book: OutreachBook = {version: 1, entries: [], cursors: {}};
@@ -35,9 +43,9 @@ function entry(overrides: Partial<OutreachEntry> = {}): OutreachEntry {
     status: 'accepted', operationId, messageId: 'sent-message', createdAt: timestamp, updatedAt: timestamp, replies: [], chatIds: ['selected@lid'], ...overrides};
 }
 function router(overrides: Record<string, unknown> = {}) {
-  const calls = {sends: [] as WhatsAppDraft[], previews: [] as WhatsAppDraft[], checks: [] as string[], operations: [] as string[], eventOptions: [] as {after?: string; phones: string[]; chatIds?: string[]; limit?: number}[]};
+  const calls = {statuses: 0, sends: [] as WhatsAppDraft[], previews: [] as WhatsAppDraft[], checks: [] as string[], operations: [] as string[], eventOptions: [] as {after?: string; phones: string[]; chatIds?: string[]; limit?: number}[]};
   const client = {
-    async status() { return {health: {ok: true, apiVersion: '1' as const, ready: true}, session: {userId: sessionId, name: 'Selected sender', status: 'connected' as const, phone: number, updatedAt: timestamp}}; },
+    async status() { calls.statuses++; return {health: {ok: true, apiVersion: '1' as const, ready: true}, session: {userId: sessionId, name: 'Selected sender', status: 'connected' as const, phone: number, updatedAt: timestamp}}; },
     async checkContact(phone: string) { calls.checks.push(phone); return {userId: sessionId, phone, onWhatsApp: true, jid: 'selected@lid', checkedAt: timestamp}; },
     async preview(draft: WhatsAppDraft): Promise<RouterSendResult> { calls.previews.push(draft); return {userId: sessionId, clientRequestId: draft.clientRequestId, operationId: null, messageId: null, status: 'preview'}; },
     async send(draft: WhatsAppDraft): Promise<RouterSendResult> { calls.sends.push(draft); return {userId: sessionId, clientRequestId: draft.clientRequestId, operationId, messageId: 'sent-message', status: 'queued'}; },
@@ -100,6 +108,145 @@ test('preview checks only approved Indian mobile contacts and never creates ledg
   assert.equal(calls.previews.length, 1); assert.equal(calls.sends.length, 0); assert.equal(store.writes, 0); assert.equal(store.book.entries.length, 0);
 });
 
+test('persisted recipient choices limit both preview and send when callers pass every run contact', async () => {
+  const store = new MemoryStore(); const {client, calls} = router();
+  const batch = run([contact(), contact({value: secondNumber, raw: secondNumber})]);
+  const contacts = contactsForRun(batch);
+  batch.outreachSelection = {contactIds: [contacts[0]!.id]};
+  const service = new OutreachService(store, client, sessionId);
+  assert.deepEqual(selectedContactsForRun(batch).map(item => item.value), [number]);
+  assert.deepEqual((await service.preview(batch, contacts)).map(item => item.to), [number]);
+  assert.deepEqual((await service.send(batch, contacts)).map(item => item.to), [number]);
+  assert.deepEqual(calls.checks, [number, number]);
+  assert.deepEqual(calls.previews.map(item => item.to), [number]);
+  assert.deepEqual(calls.sends.map(item => item.to), [number]);
+  assert.equal(store.book.entries.length, 1);
+});
+
+test('missing, empty and malformed saved recipient choices fail closed before any router request', async () => {
+  const validId = contactsForRun(run())[0]!.id;
+  for (const selection of [undefined, null, {}, {contactIds: []}, {contactIds: validId}, {contactIds: [123]}, {contactIds: [validId, 123]}]) {
+    const store = new MemoryStore(); const {client, calls} = router(); const batch = run();
+    batch.outreachSelection = selection as typeof batch.outreachSelection;
+    const service = new OutreachService(store, client, sessionId);
+    assert.deepEqual(selectedContactsForRun(batch), []);
+    assert.deepEqual(await service.preview(batch, contactsForRun(batch)), []);
+    assert.deepEqual(await service.send(batch, contactsForRun(batch)), []);
+    assert.equal(calls.statuses, 0); assert.deepEqual(calls.checks, []);
+    assert.deepEqual(calls.previews, []); assert.deepEqual(calls.sends, []);
+    assert.equal(store.writes, 0); assert.deepEqual(store.book.entries, []);
+  }
+});
+
+test('selected IDs cannot authorize a tampered number or a caller contact outside the saved run', async () => {
+  const store = new MemoryStore(); const {client, calls} = router(); const batch = run();
+  const canonical = contactsForRun(batch)[0]!;
+  const tampered = {...canonical, value: secondNumber, raw: secondNumber};
+  const foreign = contact({value: '+919876543212', raw: '+919876543212'});
+  batch.outreachSelection!.contactIds.push(foreign.id);
+  const requested = [tampered, foreign];
+  const service = new OutreachService(store, client, sessionId);
+  assert.deepEqual(selectedContactsForRun(batch, requested), []);
+  assert.deepEqual(await service.preview(batch, requested), []);
+  assert.deepEqual(await service.send(batch, requested), []);
+  assert.equal(calls.statuses, 0); assert.deepEqual(calls.checks, []);
+  assert.deepEqual(calls.sends, []); assert.equal(store.writes, 0);
+});
+
+test('sender uses canonical saved source evidence rather than caller-supplied contact metadata', async () => {
+  const store = new MemoryStore(); const {client, calls} = router(); const batch = run();
+  const canonical = contactsForRun(batch)[0]!;
+  const forged = {...canonical, sourceUrl: 'https://unrelated.example/forged', evidence: 'Caller supplied replacement',
+    name: 'Forged identity', attributions: [{sourceUrl: 'https://unrelated.example/hidden', evidence: 'Forged source', observedAt: timestamp}]};
+  const selected = selectedContactsForRun(batch, [forged]);
+  assert.deepEqual(selected, [canonical]);
+  await new OutreachService(store, client, sessionId).send(batch, [forged]);
+  assert.deepEqual(calls.sends.map(item => item.to), [number]);
+  assert.deepEqual(store.book.entries[0]!.sourceUrls, ['https://example.test/one']);
+  assert.equal(JSON.stringify(store.book).includes('unrelated.example'), false);
+});
+
+test('selection never overrides approval, and removing a choice after preview prevents dispatch', async () => {
+  const store = new MemoryStore(); const {client, calls} = router();
+  const batch = run([contact(), contact({value: secondNumber, review: 'needs-review'}),
+    contact({kind: 'email', value: 'seller@example.test'}), contact({value: '+12025550123'})]);
+  assert.deepEqual(selectableContactsForRun(batch).map(item => item.value), [number]);
+  assert.deepEqual(selectedContactsForRun(batch).map(item => item.value), [number]);
+  assert.deepEqual(selectedContactsForRun(batch, [{...contactsForRun(batch)[0]!, review: 'needs-review'}]), []);
+  const service = new OutreachService(store, client, sessionId);
+  await service.preview(batch, contactsForRun(batch));
+  batch.outreachSelection = {contactIds: []};
+  assert.deepEqual(await service.send(batch, contactsForRun(batch)), []);
+  assert.equal(calls.statuses, 1); assert.equal(calls.previews.length, 1); assert.equal(calls.sends.length, 0);
+  assert.equal(store.writes, 0);
+  batch.outreachSelection = {contactIds: [contactsForRun(batch)[0]!.id]};
+  batch.projects[0]!.contactCapture!.contacts[0]!.review = 'needs-review';
+  assert.deepEqual(selectedContactsForRun(batch), []);
+});
+
+test('phone and WhatsApp aliases share one selected recipient and preserve all canonical sources', async () => {
+  const store = new MemoryStore(); const {client, calls} = router();
+  const aliases = [contact(), contact({kind: 'whatsapp', sourceUrl: 'https://example.test/two'})];
+  const batch = run(aliases);
+  assert.equal(contactsForRun(batch).length, 1);
+  assert.equal(batch.outreachSelection!.contactIds.length, 1);
+  const service = new OutreachService(store, client, sessionId);
+  assert.equal((await service.preview(batch, aliases)).length, 1);
+  assert.equal((await service.send(batch, aliases)).length, 1);
+  assert.equal(calls.previews.length, 1); assert.equal(calls.sends.length, 1);
+  assert.deepEqual(store.book.entries[0]!.sourceUrls, ['https://example.test/one', 'https://example.test/two']);
+});
+
+test('recipient deselection during availability lookup or the pre-save checkpoint prevents transport', async () => {
+  for (const action of ['preview', 'send'] as const) {
+    const store = new MemoryStore(); const batch = run(); const {client, calls} = router();
+    const check = client.checkContact;
+    client.checkContact = async phone => { const availability = await check(phone); batch.outreachSelection = {contactIds: []}; return availability; };
+    const service = new OutreachService(store, client, sessionId);
+    assert.deepEqual(await service[action](batch, contactsForRun(batch)), []);
+    assert.deepEqual(calls.checks, [number]); assert.equal(calls.previews.length, 0); assert.equal(calls.sends.length, 0);
+    assert.equal(store.writes, 0); assert.deepEqual(store.book.entries, []);
+  }
+  const store = new MemoryStore(); const batch = run(); const {client, calls} = router();
+  const service = new OutreachService(store, client, sessionId);
+  assert.deepEqual(await service.send(batch, contactsForRun(batch), undefined, message => {
+    if (message.startsWith('Saving the exact')) batch.outreachSelection = {contactIds: []};
+  }), []);
+  assert.deepEqual(calls.checks, [number]); assert.equal(calls.sends.length, 0); assert.equal(store.writes, 0);
+});
+
+test('recipient deselection during durable save or the final sending checkpoint records definitively unsent operations', async () => {
+  for (const boundary of ['save', 'sending'] as const) {
+    const store = new MemoryStore(); const batch = run(); const contacts = contactsForRun(batch);
+    const {client, calls} = router(); const progress: string[] = [];
+    const save = store.saveOutreach.bind(store);
+    store.saveOutreach = async book => {
+      await save(book);
+      if (boundary === 'save' && store.writes === 1) {
+        assert.equal(store.book.entries[0]!.status, 'pending');
+        batch.outreachSelection = {contactIds: []};
+      }
+    };
+    const service = new OutreachService(store, client, sessionId);
+    const created = await service.send(batch, contacts, undefined, message => {
+      progress.push(message);
+      if (boundary === 'sending' && message.startsWith('Sending the explicitly reviewed')) {
+        assert.equal(store.book.entries[0]!.status, 'pending');
+        batch.outreachSelection = {contactIds: []};
+      }
+    });
+    assert.equal(created.length, 1); assert.equal(created[0]!.status, 'failed');
+    assert.equal(store.book.entries.length, 1); assert.equal(store.book.entries[0]!.status, 'failed');
+    assert.equal(store.book.entries[0]!.operationId, null); assert.equal(store.book.entries[0]!.messageId, null);
+    assert.equal(store.book.entries[0]!.clientRequestId, created[0]!.clientRequestId);
+    assert.equal(store.writes, 2); assert.deepEqual(calls.checks, [number]); assert.equal(calls.sends.length, 0);
+    assert.ok(progress.some(message => /not sent/.test(message)));
+    batch.outreachSelection = {contactIds: contacts.map(contact => contact.id)};
+    assert.deepEqual(await service.send(batch, contacts), []);
+    assert.equal(calls.sends.length, 0); assert.equal(store.book.entries.length, 1);
+  }
+});
+
 test('missing configuration, invalid sender name and disconnected sessions fail before writes', async () => {
   const store = new MemoryStore(); const {client} = router();
   assert.throws(() => new OutreachService(store, undefined, sessionId), /Configure/);
@@ -148,7 +295,8 @@ test('an uncertain send is never retried and reconciliation queries its original
   const store = new MemoryStore(); let sends = 0;
   const {client, calls} = router({send: async () => { sends++; throw new WhatsAppRouterError('Connection lost', 'REQUEST_FAILED', true); }});
   const service = new OutreachService(store, client, sessionId);
-  await service.send(run(), [contact(), contact({id: 'second', value: secondNumber})]);
+  const contacts = [contact(), contact({value: secondNumber})];
+  await service.send(run(contacts), contacts);
   assert.equal(sends, 1); assert.equal(store.book.entries.length, 1); assert.equal(store.book.entries[0]!.status, 'uncertain');
   const id = store.book.entries[0]!.clientRequestId;
   await service.send(run(), [contact()]); assert.equal(sends, 1);

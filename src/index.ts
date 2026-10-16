@@ -36,7 +36,8 @@ Set up starts with website logins: Enter opens Chrome, C checks, N continues.
 Audio Python override: BISMYTH_AUDIO_PYTHON (otherwise private app environment).
 Firecrawl: FIRECRAWL_API_KEY or firecrawl-login; BISMYTH_FIRECRAWL_URL is optional.
 WhatsApp: BISMYTH_WHATSAPP_ROUTER_URL / _API_KEY and BISMYTH_WHATSAPP_SESSION_ID.
-In the TUI: H collects contacts; 5 opens Contacts; Playwright enquiry controls remain.
+In the TUI: Saved runs → W chooses recipients; Space toggles, B selects approved, Z clears.
+Enter reviews only checked recipients; H collects contacts and 5 opens Contacts.
 `;
 async function lock(directory: string): Promise<() => Promise<void>> {
   const path = join(directory, 'session.lock');

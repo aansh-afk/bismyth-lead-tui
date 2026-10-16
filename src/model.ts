@@ -23,6 +23,8 @@ export interface Run {
   version: 1; id: string; createdAt: string; updatedAt: string;
   state: 'ready' | 'discovering' | 'running' | 'enriching' | 'messaging' | 'paused' | 'stopped' | 'complete';
   config: Config; projects: Project[]; events: {at: string; message: string}[];
+  /** Explicit WhatsApp recipients for this run. Missing means nobody selected. */
+  outreachSelection?: {contactIds: string[]};
 }
 export const defaults: Config = {
   stateCode: '', city: '', intent: 'buy', name: '', email: '', phone: '', sites: [...sites],

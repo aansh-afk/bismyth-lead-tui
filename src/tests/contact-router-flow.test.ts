@@ -25,6 +25,7 @@ const sessionId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const operationId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const recipient = '+919876543210';
+const uncheckedRecipient = '+919876543212';
 const referral = '+919876543211';
 const chatId = '919876543210@s.whatsapp.net';
 
@@ -54,13 +55,20 @@ test('real loopback router flow previews without sends, persists before sending,
     id: 'fixture-public-contact', kind: 'phone', value: recipient, raw: recipient,
     name: 'Fixture Seller', role: 'owner', sourceUrl: listing.url, evidence: `Owner Fixture Seller: ${recipient}`,
     observedAt, review: 'approved', reviewedBy: 'operator', whatsapp: 'unchecked',
+  }, {
+    id: 'fixture-unchecked-contact', kind: 'phone', value: uncheckedRecipient, raw: uncheckedRecipient,
+    name: 'Unchecked Fixture Seller', role: 'owner', sourceUrl: listing.url, evidence: `Owner Unchecked Fixture Seller: ${uncheckedRecipient}`,
+    observedAt, review: 'approved', reviewedBy: 'operator', whatsapp: 'unchecked',
   }]};
   run.projects = [listing];
   const projectsBefore = structuredClone(run.projects);
   const contacts = contactsForRun(run);
+  assert.equal(contacts.length, 2);
+  run.outreachSelection = {contactIds: contacts.filter(contact => contact.value === recipient).map(contact => contact.id)};
   const expectedMessage = renderManagerIntroduction({senderName: config.name, senderBusiness: config.senderBusiness});
   const previewBodies: SendPayload[] = []; const sentBodies: SendPayload[] = [];
   const operationLookups: string[] = []; const eventCursors: (string | null)[] = [];
+  const checkedRecipients: string[] = [];
   const fixtureErrors: unknown[] = [];
   let receiptWasPersisted = false;
   let connected = true;
@@ -80,6 +88,7 @@ test('real loopback router flow previews without sends, persists before sending,
         assert.equal(url.search, ''); respond(response, {userId: sessionId, name: 'Fixture sender session', status: connected ? 'connected' : 'disconnected', phone: '+919000000001', updatedAt: new Date().toISOString()}); return;
       }
       if (request.method === 'GET' && url.pathname === `/api/contacts/${sessionId}/check/%2B919876543210`) {
+        checkedRecipients.push(recipient);
         assert.equal(url.search, ''); respond(response, {userId: sessionId, phone: recipient, onWhatsApp: true, jid: chatId, checkedAt: new Date().toISOString()}); return;
       }
       if (request.method === 'POST' && url.pathname === '/api/messages/send') {
@@ -207,4 +216,7 @@ test('real loopback router flow previews without sends, persists before sending,
   assert.match(app.notice, /Connect the selected WhatsApp sender session/);
   assert.equal(sentBodies.length, 1); assert.equal(previewBodies.length, 1);
   assert.equal((await store.outreach()).entries.length, 1);
+  assert.ok(checkedRecipients.length > 0);
+  assert.ok(checkedRecipients.every(phone => phone === recipient));
+  assert.equal(JSON.stringify(await store.outreach()).includes(uncheckedRecipient), false);
 });
