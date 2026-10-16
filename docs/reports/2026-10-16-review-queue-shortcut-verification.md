@@ -25,4 +25,10 @@ The chooser now opens on Enter or Ctrl+R without changing the selected page, cop
 
 No live portal discovery, login, enquiry submission, Firecrawl request or WhatsApp message is required or performed for this shortcut repair. Browser adapters and enquiry processing are unchanged. A stored signed-in observation is not proof that a remote session remains authenticated. Expired or challenged sessions still require attention in Chrome.
 
-Publication and installed-file verification are pending. The installer must preserve the saved profile, accounts, credentials and runs. An already running terminal process must be quit and reopened to load the new code.
+## Publication and laptop verification
+
+Source commit: `fbb551e`. Public release: https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.18 . The anonymously downloaded archive matched the recorded checksum. The pinned public installer updated `/home/aansh/.local`; `bismyth-leads --version` returned `0.1.18`, and the installed controller and package metadata match the tested build.
+
+The installed command was also exercised in the isolated real pseudo-terminal: Ctrl+R stayed on Review queue and showed the chooser, Escape cancelled, reopening worked, Q exited with code zero, fixture data was unchanged, and no browser was started. All 18 existing user profile/account/run/credential files remained byte-for-byte unchanged across packaging and installation; the Firecrawl credential remains mode 0600.
+
+Source, tests, package files, release archive and documentation were synchronized to the local TUI workspace. The parent homepage repository and the user's active terminal/browser processes were left in place. Quit the running TUI with Q, reopen `bismyth-leads`, and use Ctrl+R on Review queue to load this fix.
