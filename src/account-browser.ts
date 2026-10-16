@@ -179,7 +179,21 @@ export class AccountBrowser {
         const label = (node: Element): string => (node.getAttribute('aria-label') || node.textContent || '').trim().replace(/\s+/g, ' ');
         const controls = [...document.querySelectorAll('button, a, [role="button"], [role="menuitem"]')].filter(visible);
         const texts = controls.map(label);
-        const challenge = [...document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare.com"], .g-recaptcha, .h-captcha, [id="challenge-form"]')].some(visible);
+        const challenge = [...document.querySelectorAll('iframe[src*="recaptcha"], iframe[src*="hcaptcha"], iframe[src*="challenges.cloudflare.com"], .g-recaptcha, .h-captcha, [id="challenge-form"]')].some(node => {
+          if (!visible(node)) return false;
+          if (node.tagName === 'IFRAME') {
+            try {
+              const url = new URL(node.getAttribute('src') || '', location.href);
+              // An open image/audio challenge remains a gate even when a badge
+              // is also mounted. Passive v3/invisible anchors are only branding.
+              if (/\/recaptcha\/(?:api2|enterprise)\/bframe\/?$/.test(url.pathname)) return true;
+              if (/\/recaptcha\/(?:api2|enterprise)\/anchor\/?$/.test(url.pathname)
+                && (url.searchParams.get('size') === 'invisible' || node.closest('.grecaptcha-badge'))) return false;
+            } catch { /* Unknown visible provider frames remain a gate. */ }
+          }
+          if (node.matches('.g-recaptcha') && (node.getAttribute('data-size') === 'invisible' || node.querySelector('.grecaptcha-badge'))) return false;
+          return true;
+        });
         const headings = [...document.querySelectorAll('h1, h2, h3, [role="heading"], [role="alert"]')].filter(visible).map(label);
         const gate = /security check(?:up)?|access denied|verify (?:that )?you(?: are|'re) (?:a )?human|unusual traffic|suspicious activity|request (?:was )?blocked|just a moment|try again later/i;
         const blocked = challenge || gate.test(document.title) || headings.some(text => gate.test(text));
@@ -210,11 +224,16 @@ export class AccountBrowser {
           })
           && [...document.querySelectorAll('div, span')].some(node => visible(node) && /^log\s*out$/i.test(label(node)) && ![...node.children].some(child => /^log\s*out$/i.test(label(child))));
         const housingLogin = portal === 'housing' && [...document.querySelectorAll('.T_loginBtnStyle, input[data-testid="login_input_text"]')].some(visible);
+        const squareYardsLogout = portal === 'squareyards' && [...document.querySelectorAll('.lgnDsktpDrpdwnUl li.userLogout .logOut')].some(node => visible(node) && /^log\s*out$/i.test(label(node)));
+        const squareYardsProfile = portal === 'squareyards' && [...document.querySelectorAll('.headerProfileBoxParent.withUserProfile > .headerProfileBox')].some(node => visible(node)
+          && [...node.querySelectorAll('.profileDropdownBox li.userLogout .logOut')].some(logout => /^log\s*out$/i.test(label(logout))));
+        const squareYardsPortfolio = portal === 'squareyards' && /^\/user\/my-portfolio\/?$/i.test(location.pathname)
+          && [/^profile$/i, /^my portfolio$/i, /^log\s*out$/i].every(pattern => [...document.querySelectorAll('a, li, div, span')].some(node => visible(node) && pattern.test(label(node))));
         const signedOut = noBrokerLogin || quikrLogin || housingLogin || texts.some(text => loginLabel.test(text)) || [...document.querySelectorAll('input[type="password"], input[autocomplete="one-time-code"]')].some(visible);
         const logout = texts.some(text => /^(?:log\s*out|sign\s*out)$/i.test(text));
         const identity = headings.some(text => /^(?:signed|logged) in as\s+\S/i.test(text));
         const accountControl = texts.some(text => /^(?:my profile|edit profile|account settings)$/i.test(text));
-        return {blocked, signedOut, signedIn: noBrokerProfile || quikrProfile || housingHeader || housingPopover || housingProfile || logout || (identity && accountControl && !signedOut)};
+        return {blocked, signedOut, signedIn: noBrokerProfile || quikrProfile || housingHeader || housingPopover || housingProfile || squareYardsLogout || squareYardsProfile || squareYardsPortfolio || logout || (identity && accountControl && !signedOut)};
       }, portal);
       // A failed Chrome navigation can retain the requested first-party URL.
       // Clear that failure only when actual account/security UI has appeared,
