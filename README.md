@@ -211,7 +211,9 @@ Submitted and uncertain enquiries are deduplicated across saved submit-mode runs
 
 The meeting target is 100–300 projects per run. Discovery can return fewer projects, and queued/prepared projects are not successful enquiries. Phone verification, site limits, changing forms and unavailable search results can prevent reaching the target. Real portal enquiry submissions have not been performed during development.
 
-## Automatic CAPTCHA attempts
+## Website verification
+
+Square Yards, Magicbricks, OLX and Quikr use a read-only browser handoff for security checks. Complete verification in Chrome, then recheck; these four flows do not run automatic challenge actions. The legacy automatic behavior described below applies to 99acres, NoBroker and Housing only.
 
 During discovery, contact preparation and post-submit verification, the app attempts reCAPTCHA checkboxes and visible 3×3/4×4 image grids using **GPT-6 Luna with low reasoning** through your saved ChatGPT subscription. Playwright applies its validated tile selections and Verify decisions. Each automatic cycle has a ten-minute budget and at most twelve image decisions; each image-loading wait allows thirty seconds and each Luna request allows three minutes. These are upper limits, not compulsory delays. Enter permits a second cycle on the same page; subsequent automatic cycles are bounded. CAPTCHA Verify and a verification page's enabled Proceed button may be clicked; this is separate from submitting a property enquiry.
 
