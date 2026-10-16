@@ -2,7 +2,7 @@ import {createHash, randomUUID} from 'node:crypto';
 import {stateForCity, validLocation} from './locations.js';
 import type {ContactCapture} from './contacts.js';
 
-export const sites = ['99acres', 'nobroker', 'housing'] as const;
+export const sites = ['99acres', 'nobroker', 'housing', 'squareyards', 'magicbricks', 'olx', 'quikr'] as const;
 export type Site = typeof sites[number];
 export type ProjectStatus = 'queued' | 'working' | 'prepared' | 'submitted' | 'failed' | 'skipped' | 'uncertain';
 export interface Config {
@@ -17,6 +17,7 @@ export interface Project {
   id: string; site: Site; title: string; url: string; status: ProjectStatus;
   detail: string; updatedAt: string;
   contactCapture?: ContactCapture;
+  contactAction?: {kind: 'interest' | 'visit-booking' | 'portal-message'; summary: string};
 }
 export interface Run {
   version: 1; id: string; createdAt: string; updatedAt: string;
@@ -47,7 +48,7 @@ export function validateConfig(config: Config, contact = true): string[] {
 export function canonicalUrl(raw: string): string {
   const url = new URL(raw);
   if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) throw new Error('Use an http(s) URL without credentials.');
-  const aliases: Record<string, string> = {'99acres.com': 'www.99acres.com', 'nobroker.in': 'www.nobroker.in', 'www.housing.com': 'housing.com'};
+  const aliases: Record<string, string> = {'99acres.com': 'www.99acres.com', 'nobroker.in': 'www.nobroker.in', 'www.housing.com': 'housing.com', 'squareyards.com': 'www.squareyards.com', 'magicbricks.com': 'www.magicbricks.com', 'olx.in': 'www.olx.in', 'quikr.com': 'www.quikr.com'};
   if (aliases[url.hostname]) url.hostname = aliases[url.hostname];
   url.hash = '';
   for (const key of [...url.searchParams.keys()]) if (/^(utm_|gclid|fbclid|fltcnt|ref$)/i.test(key)) url.searchParams.delete(key);
@@ -55,10 +56,13 @@ export function canonicalUrl(raw: string): string {
   url.pathname = url.pathname.replace(/\/$/, '') || '/';
   return url.href;
 }
+const siteDomains: Record<Site, string> = {'99acres': '99acres.com', nobroker: 'nobroker.in', housing: 'housing.com', squareyards: 'squareyards.com', magicbricks: 'magicbricks.com', olx: 'olx.in', quikr: 'quikr.com'};
 export function siteForUrl(raw: string): Site | undefined {
-  const host = new URL(raw).hostname;
-  return sites.find(site => host === ({'99acres': '99acres.com', nobroker: 'nobroker.in', housing: 'housing.com'}[site]) || host.endsWith('.' + ({'99acres': '99acres.com', nobroker: 'nobroker.in', housing: 'housing.com'}[site])));
+  const url = new URL(raw);
+  if (!['https:', 'http:'].includes(url.protocol) || url.username || url.password) return;
+  return sites.find(site => url.hostname === siteDomains[site] || url.hostname.endsWith('.' + siteDomains[site]));
 }
+
 export function project(site: Site, title: string, raw: string): Project {
   const url = canonicalUrl(raw);
   return {id: createHash('sha256').update(site + ':' + url).digest('hex').slice(0, 20), site, title: title.trim() || url, url, status: 'queued', detail: '', updatedAt: new Date().toISOString()};

@@ -48,7 +48,7 @@ test('website logins stay inside Set up and every portal is reachable at support
   }
 });
 
-test('login-only portals are distinct from the existing listing adapters', () => {
+test('website rows identify catalogued listing adapters', () => {
   for (const [width, height] of sizes) for (const [selected, portal] of portalAccounts.entries()) {
     const view = fixture(width, height); view.accountSetup!.selected = selected;
     const row = renderedLines(view).find(line => line.includes('› ' + portal.label));

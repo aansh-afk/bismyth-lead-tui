@@ -111,7 +111,7 @@ export function renderView(view: View): string {
   }
   if (view.details) {
     const details = messageDetailLayout(view); const detailLines: string[] = [];
-    detailLines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  enquiry desk', ansi.faint));
+    detailLines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  Atlas lead desk', ansi.faint));
     detailLines.push('  ' + paint(cell('AI · ' + view.auth, width - 4), view.auth.includes('connected') ? ansi.green : ansi.amber));
     detailLines.push(paint('  ' + '─'.repeat(width - 4), ansi.faint));
     detailLines.push('  ' + paint('Full message', ansi.bright)); detailLines.push('');
@@ -125,7 +125,7 @@ export function renderView(view: View): string {
   const area = width - sidebar - 6;
   const lines: string[] = [];
   const names = ['Set up', 'Review queue', 'Run & results', 'Saved runs', 'Contacts'];
-  lines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  enquiry desk', ansi.faint) + (view.active || accountBusy ? paint('    ' + cell(status, width - 30), statusColor) : ''));
+  lines.push(paint('  BISMYTH', ansi.cyan) + paint('  /  Atlas lead desk', ansi.faint) + (view.active || accountBusy ? paint('    ' + cell(status, width - Array.from('  BISMYTH  /  Atlas lead desk    ').length), statusColor) : ''));
   lines.push('  ' + paint(cell('AI · ' + view.auth, width - 5), view.auth.includes('connected') ? ansi.green : ansi.amber));
   lines.push(paint('  ' + '─'.repeat(width - 4), ansi.faint));
   if (!sidebar) lines.push('  ' + ['Set up', 'Review', 'Run', 'Saved', 'Contacts'].map((name, i) => paint(` ${i + 1} ${name} `, view.screen === i ? ansi.selected : ansi.faint)).join(' '));
@@ -203,7 +203,9 @@ export function renderView(view: View): string {
       const done = run.projects.length - count.queued - count.working;
       const size = Math.min(32, area - 15); const filled = run.projects.length ? Math.round(size * done / run.projects.length) : 0;
       add(`${'━'.repeat(filled)}${'─'.repeat(size - filled)}  ${done}/${run.projects.length} checked`, ansi.cyan);
-      add(`${count.submitted} confirmed   ${count.prepared} forms tested   ${count.failed} failed`, ansi.green);
+      const bookings = run.projects.filter(item => item.status === 'submitted' && item.contactAction?.kind === 'visit-booking').length;
+      const messages = run.projects.filter(item => item.status === 'submitted' && item.contactAction?.kind === 'portal-message').length;
+      add(`${count.submitted - bookings - messages} interests · ${messages} messages · ${bookings} visits · ${count.prepared} tested`, ansi.green);
       add(`${count.uncertain} need review   ${count.skipped} skipped   ${count.queued} waiting`, ansi.faint);
       add(''); add('ACTIVITY', ansi.faint);
       const logs = run.events;
@@ -214,14 +216,15 @@ export function renderView(view: View): string {
     }
   } else if (view.screen === 4) {
     const contacts = view.contacts || [];
-    add('Public contacts → WhatsApp', ansi.bright);
+    add('Contacts → Atlas outreach', ansi.bright);
     add('Firecrawl: ' + (view.firecrawlStatus || 'Not configured'), ansi.faint);
     add('Router: ' + (view.routerStatus || 'Not configured'), ansi.faint);
     add(`${contacts.length} unique contacts · ${contacts.filter(contact => contact.review === 'approved').length} approved · ${contacts.filter(contact => view.contactSelection?.includes(contact.id)).length} selected`, ansi.cyan);
     const captured = run?.projects.filter(item => item.contactCapture && item.contactCapture.status !== 'working').length || 0;
     add(`${captured}/${run?.projects.length || 0} pages checked · enquiry counts stay separate`, ansi.faint);
     if (!contacts.length) {
-      add('H gathers public contacts from your loaded listings.');
+      add('Confirmed interests collect revealed portal contacts.');
+      add('H optionally checks public listings with Firecrawl.');
       add('Hidden/masked numbers remain unavailable.', ansi.faint);
     } else {
       const available = Math.max(1, maxBody - 9); const selected = view.selected[4] || 0;
@@ -231,7 +234,7 @@ export function renderView(view: View): string {
         add(`${view.contactSelection?.includes(contact.id) ? '☑' : '☐'} ${cell(contact.value, 15)} ${cell(state, 13)} ${contact.name || contact.organization || contact.role || 'Identity needs review'}`, selected === start + offset ? ansi.selected : contact.review === 'approved' ? ansi.green : ansi.text);
       }
       const contact = contacts[selected];
-      if (contact) { add('Source: ' + contact.sourceUrl, ansi.faint); add('Evidence: ' + contact.evidence + ' · E reads all', ansi.faint); }
+      if (contact) { add('Source: ' + [...new Set((contact.attributions || [contact]).map(source => source.visibility || 'public'))].join(' + ') + ' · ' + contact.sourceUrl, ansi.faint); add('Evidence: ' + contact.evidence + ' · E reads all', ansi.faint); }
     }
   } else {
     add('Saved runs', ansi.bright); add('Enter loads a run. X exports CSV. Your progress is kept locally.', ansi.faint); add('');
@@ -254,7 +257,7 @@ export function renderView(view: View): string {
   lines.push(...footerLines.map(line => '  ' + paint(line, ansi.cyan)));
   if (view.editing || view.review !== undefined || view.picker || view.dialog) {
     const modalWidth = Math.min(width - 12, 68); const x = Math.floor((width - modalWidth) / 2);
-    const contents = view.editing ? [view.editing.label, '', ...wrap(view.editing.hint, modalWidth - 6).slice(0, 2), '', '> ' + view.editing.buffer.slice(-(modalWidth - 9)) + '▏', '', 'Enter Save · Esc Cancel · Ctrl+U Clear'] : ['Choose how to run this queue', '', `${run?.projects.length || 0} ${run?.projects.length === 1 ? 'property' : 'properties'} · ${run?.config.city || ''}`, `${run?.config.name || ''} · ${run?.config.phone || ''}`, '', ...['Test forms — fills details, no final submit', 'Send enquiries — submits your contact details', 'Back to queue'].map((text, i) => `${i === view.review ? '›' : ' '} ${text}`), '', '↑↓ Choose · Enter Start · Esc Cancel'];
+    const contents = view.editing ? [view.editing.label, '', ...wrap(view.editing.hint, modalWidth - 6).slice(0, 2), '', '> ' + view.editing.buffer.slice(-(modalWidth - 9)) + '▏', '', 'Enter Save · Esc Cancel · Ctrl+U Clear'] : ['Choose how to run this queue', '', `${run?.projects.length || 0} ${run?.projects.length === 1 ? 'property' : 'properties'} · ${run?.config.city || ''}`, `${run?.config.name || ''} · ${run?.config.phone || ''}`, ...wrap('Atlas: share callback details. ' + (run?.projects.some(item => item.site === 'nobroker') ? 'NoBroker can book a real visit using its account phone. ' : '') + 'E explains the flow and chat text.', modalWidth - 6), '', ...['Test forms — fills details, no final submit', 'Send enquiries — submits your contact details', 'Back to queue'].map((text, i) => `${i === view.review ? '›' : ' '} ${text}`), '', '↑↓ Choose · Enter Start · E Details · Esc Cancel'];
     if (view.picker) {
       const start = Math.max(0, view.picker.selected - 3);
       contents.splice(0, contents.length, view.picker.title, '', 'Search: ' + view.picker.query + '▏', '', ...view.picker.choices.slice(start, start + 6).map((choice, index) => `${start + index === view.picker!.selected ? '›' : ' '} ${choice}`), '', view.picker.choices.length ? `${view.picker.choices.length} matches · ↑↓ Select · Enter Choose · Esc Cancel` : 'No matches. Backspace changes your search.');

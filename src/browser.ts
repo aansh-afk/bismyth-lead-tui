@@ -12,6 +12,11 @@ import type {AudioSolver} from './audio-captcha.js';
 import type {CaptchaActivity, CaptchaResult, GridSolver} from './captcha.js';
 import {discoverPublicListings} from './listing-api.js';
 import type {PublicListingContext} from './listing-api.js';
+import {prepareNoBrokerVisit, submitNoBrokerVisit, noBrokerVisitEvidence} from './nobroker-flow.js';
+import {capturePortalContacts} from './portal-contacts.js';
+import type {ContactCapture} from './contacts.js';
+import {portalCatalog} from './portal-catalog.js';
+import {preparePortalChat, submitPortalChat, portalChatEvidence} from './portal-chat.js';
 
 export function publicListingContext(options: {site: Site; intent: Config['intent']; city: string}): PublicListingContext | undefined {
   const url = new URL(location.href);
@@ -70,12 +75,13 @@ export function publicListingContext(options: {site: Site; intent: Config['inten
 }
 
 export type Handoff = (message: string, verification?: boolean) => Promise<'continue' | 'skip'>;
-export interface Prepared {ready: boolean; reason: string; baseline: string[]; verification?: boolean}
+export interface Prepared {ready: boolean; reason: string; baseline: string[]; verification?: boolean; actionKind?: 'interest' | 'visit-booking' | 'portal-message'; summary?: string; alreadyShared?: boolean; allowHandoffConfirmation?: boolean}
 export interface Driver {
   discover(config: Config, site: Site, limit: number, checkpoint: () => Promise<void>, handoff: Handoff): Promise<Project[]>;
   prepare(item: Project, config: Config, navigate?: boolean): Promise<Prepared>;
   submit(item: Project): Promise<boolean>;
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
+  captureContacts?(item: Project, config: Config): Promise<ContactCapture>;
   verifyCaptcha?(): Promise<CaptchaResult>;
   verificationReady?(): Promise<boolean>;
   takeDiscoveryNotes?(): string[];
@@ -96,6 +102,9 @@ export class PortalBrowser implements Driver {
   private decisionController = new AbortController();
   private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
+  private visitReady = false;
+  private submitScope?: Locator;
+  private chatDraft?: string;
   private activity: CaptchaActivity = async () => undefined;
   private checkpoint: () => Promise<void> = async () => undefined;
   constructor(private readonly dataDirectory: string, private readonly headless = false, private readonly decide = chooseWithSubscription, private readonly solveCaptcha: GridSolver = solveGridWithSubscription, private readonly listingRequest: (url: string, init?: RequestInit) => Promise<Response> = fetch, private readonly solveAudio?: AudioSolver) {}
@@ -125,6 +134,7 @@ export class PortalBrowser implements Driver {
     await this.checkpoint();
     const page = this.page!;
     if (!await captchaPending(page)) { this.captchaFailure = undefined; return {pending: false, reason: ''}; }
+    if (['squareyards', 'magicbricks', 'olx', 'quikr'].includes(siteForUrl(page.url()) || '')) return {pending: true, reason: 'Complete this website verification in Chrome, then C rechecks. No security-check controls were clicked.'};
     if (await captchaBlocked(page)) { await this.activity('CAPTCHA: ' + blockedCaptcha.reason); return blockedCaptcha; }
     const attempts = this.captchaFailure?.url === page.url() ? this.captchaFailure.attempts : 0;
     if (attempts >= 2 && !await captchaCanContinue(page) && !await tokenPresent(page)) return {pending: true, reason: 'Automatic CAPTCHA attempt limit reached (2 on this page). Complete verification in Chrome or K skips.'};
@@ -144,27 +154,32 @@ export class PortalBrowser implements Driver {
   private async settle(): Promise<void> {
     await this.page!.waitForLoadState('domcontentloaded').catch(() => undefined);
   }
-  private async visible(selector: string): Promise<Locator | null> {
-    const elements = this.page!.locator(selector);
+  private async visible(selector: string, root: Page | Locator = this.page!): Promise<Locator | null> {
+    const elements = root.locator(selector);
     for (let index = 0; index < await elements.count(); index++) {
       const element = elements.nth(index);
       if (await element.isVisible() && await element.isEnabled()) return element;
     }
     return null;
   }
-  private async clickLabels(labels: string[], selector?: string): Promise<boolean> {
+  private async clickLabels(labels: string[], selector?: string, root: Page | Locator = this.page!): Promise<boolean> {
     if (selector) {
-      const element = await this.visible(selector);
+      const element = await this.visible(selector, root);
       if (element) { await element.click(); await this.settle(); return true; }
     }
     for (const label of labels) {
       const name = new RegExp('^' + label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$', 'i');
       for (const role of ['button', 'link'] as const) {
-        const elements = this.page!.getByRole(role, {name});
+        const elements = root.getByRole(role, {name});
         for (let index = 0; index < await elements.count(); index++) {
           const element = elements.nth(index);
           if (await element.isVisible() && await element.isEnabled()) { await element.click(); await this.settle(); return true; }
         }
+      }
+      const textControls = root.getByText(name);
+      for (let index = 0; index < await textControls.count(); index++) {
+        const element = textControls.nth(index);
+        if (await element.isVisible() && await element.isEnabled() && await element.evaluate(node => !node.closest('[aria-disabled="true"],[inert]') && (Boolean(node.closest('button,a[href],[role="button"],[onclick],[tabindex]')) || getComputedStyle(node).cursor === 'pointer'))) { await element.click(); await this.settle(); return true; }
       }
     }
     return false;
@@ -214,6 +229,16 @@ export class PortalBrowser implements Driver {
       result.set(item.id, item);
     }
     const searchSeeds = seeds.filter(url => !pattern.test(new URL(url).pathname));
+    if (!searchSeeds.length && !seeds.length && ['squareyards', 'magicbricks', 'olx', 'quikr'].includes(site)) {
+      const catalog = portalCatalog[site];
+      await this.navigate(catalog.searchUrl(config.city, config.intent));
+      if (catalog.searchNeedsSelection?.(config.city)) {
+        const answer = await handoff(`${site}: confirm the search is ${config.intent} properties in ${config.city} in Chrome, then C continues; K skips. The public entry does not establish its location filter.`);
+        if (answer === 'skip') return [];
+        if (siteForUrl(page.url()) !== site) throw new Error('Search must stay on ' + site);
+      }
+      searchSeeds.push(page.url());
+    }
     if (!searchSeeds.length && !seeds.length) {
       await this.navigate(definition.home);
       let homeChallenge = await this.verifyCaptcha();
@@ -262,7 +287,7 @@ export class PortalBrowser implements Driver {
       }
       await collectPageLinks();
       if (result.size >= limit) { this.discoveryNotes.push(`${site}: initial page filled the queue without extra listing requests.`); continue; }
-      if (site !== '99acres') {
+      if (site === 'nobroker' || site === 'housing') {
         await page.waitForFunction(() => Boolean((window as unknown as {__INITIAL_STATE__?: unknown}).__INITIAL_STATE__) || [...document.scripts].some(script => /nb\.appState\s*=/.test(script.textContent || '')), undefined, {timeout: 2500}).catch(() => undefined);
         const currentUrl = page.url();
         const context = await page.evaluate(publicListingContext, {site, intent: config.intent, city: config.city});
@@ -307,34 +332,70 @@ export class PortalBrowser implements Driver {
   }
   private async evidence(item: Project): Promise<string[]> {
     const definition = this.definitions[item.site];
-    return this.page!.evaluate(([pattern, selector]) => {
+    if (this.chatDraft) return portalChatEvidence(this.page!, this.chatDraft);
+    const standard = await this.page!.evaluate(([pattern, selector]) => {
       const result: string[] = [];
-      const visible = (node: Element): boolean => { const b = node.getBoundingClientRect(); return b.width > 0 && b.height > 0 && getComputedStyle(node).visibility !== 'hidden'; };
-      if (selector) for (const node of document.querySelectorAll(selector)) if (visible(node)) result.push('selector:' + (node.textContent || '').trim());
+      const visible = (node: Element): boolean => { const b = node.getBoundingClientRect(); const style = getComputedStyle(node); return b.width > 0 && b.height > 0 && style.visibility !== 'hidden' && style.opacity !== '0' && !node.closest('[hidden],[aria-hidden="true"],[inert]'); };
+      if (selector && [...document.querySelectorAll(selector)].some(visible)) result.push('selector:' + selector);
       const matcher = new RegExp(pattern, 'i');
-      for (const node of document.querySelectorAll('p, h1, h2, h3, [role="alert"], [role="status"], div, span')) {
-        const text = (node.textContent || '').trim();
-        if (text.length < 250 && matcher.test(text) && visible(node)) result.push(text);
+      const candidates = 'p, h1, h2, h3, [role="alert"], [role="status"], div, span';
+      const textOf = (node: Element): string => ((node as HTMLElement).innerText || '').trim().replace(/\s+/g, ' ');
+      for (const node of document.querySelectorAll(candidates)) {
+        const text = textOf(node);
+        if (!text || text.length >= 250 || !matcher.test(text) || !visible(node)) continue;
+        // A parent wrapper changing because a phone number was revealed is not a
+        // new confirmation. Keep the smallest visible confirmation element.
+        if ([...node.querySelectorAll(candidates)].some(child => visible(child) && matcher.test(textOf(child)))) continue;
+        result.push(text);
       }
       return [...new Set(result)];
     }, [definition.successPattern, definition.successSelector] as const);
+    return item.site === 'nobroker' ? [...standard, ...await noBrokerVisitEvidence(this.page!)] : standard;
   }
   async prepare(item: Project, config: Config, navigate = true): Promise<Prepared> {
     const page = await this.start(config);
     const definition = this.definitions[item.site];
-    if (navigate) await this.navigate(item.url);
+    if (navigate) { this.visitReady = false; this.submitScope = undefined; this.chatDraft = undefined; await this.navigate(item.url); }
     const gate = await this.verifyCaptcha();
-    if (gate.pending) return {ready: false, reason: gate.reason, baseline: [], verification: true};
+    if (gate.pending) return {ready: false, reason: gate.reason, baseline: [], verification: true, allowHandoffConfirmation: false};
     const baseline = await this.evidence(item);
+    if (item.site === 'nobroker') {
+      const visit = await prepareNoBrokerVisit(page, this.checkpoint);
+      if (visit.detected) {
+        this.visitReady = visit.ready;
+        return {ready: visit.ready, reason: visit.reason, baseline, actionKind: 'visit-booking', summary: visit.summary};
+      }
+    }
+    if (portalCatalog[item.site].contactMode === 'chat') {
+      const chat = await preparePortalChat(page, config);
+      if (chat.detected) {
+        this.chatDraft = chat.draft;
+        return {ready: chat.ready, reason: chat.reason, baseline, actionKind: 'portal-message', summary: 'Atlas business introduction with the configured callback number and email.', alreadyShared: chat.alreadyShared};
+      }
+    }
     // Check existing forms before opening a modal; avoid closing an already open form.
     let phone = false;
     for (const selector of definition.fields.phone) { const field = await this.visible(selector); if (field) { phone = true; break; } }
     if (!phone) {
-      const opened = await this.subscriptionContact();
-      if (!opened) await this.clickLabels(definition.openLabels, definition.openSelector);
+      const opened = await this.clickLabels(definition.openLabels);
+      if (!opened && !await this.clickLabels([], definition.openSelector)) await this.subscriptionContact();
     }
     const formChallenge = await this.verifyCaptcha();
     if (formChallenge.pending) return {ready: false, reason: formChallenge.reason, baseline, verification: true};
+    if (item.site === 'nobroker') {
+      await page.locator('.calender-compoent button, ' + definition.fields.phone.join(',')).filter({visible: true}).first().waitFor({state: 'visible', timeout: 8000}).catch(() => undefined);
+      const visit = await prepareNoBrokerVisit(page, this.checkpoint);
+      if (visit.detected) {
+        this.visitReady = visit.ready;
+        return {ready: visit.ready, reason: visit.reason, baseline, actionKind: 'visit-booking', summary: visit.summary};
+      }
+    }
+    if (portalCatalog[item.site].contactMode === 'chat') {
+      await page.locator('textarea,[contenteditable="true"][role="textbox"]').filter({visible: true}).first().waitFor({state: 'visible', timeout: 4000}).catch(() => undefined);
+      const chat = await preparePortalChat(page, config);
+      this.chatDraft = chat.draft;
+      return {ready: chat.ready, reason: chat.reason, baseline, actionKind: 'portal-message', summary: 'Atlas business introduction with the configured callback number and email.', alreadyShared: chat.alreadyShared};
+    }
     await page.locator(definition.fields.phone.join(',')).filter({visible: true}).first().waitFor({state: 'visible', timeout: 4000}).catch(() => undefined);
     const missing: string[] = [];
     const values: Record<string, string> = {name: config.name, email: config.email, phone: config.phone, ...config.extraFields};
@@ -342,19 +403,28 @@ export class PortalBrowser implements Driver {
     for (const [key, selectors] of Object.entries(definition.fields)) {
       const value = values[key];
       if (!value) continue;
-      let filled = false;
+      let filled = false; let present = false;
       for (const selector of selectors) {
         const field = await this.visible(selector);
         if (!field) continue;
+        present = true;
+        if (key === 'phone') {
+          const container = field.locator('xpath=ancestor::*[self::form or @role="dialog"][1]');
+          if (await container.count() === 1) this.submitScope = container;
+        }
         const editable = await field.evaluate(node => node instanceof HTMLInputElement && !node.readOnly && !['checkbox', 'radio', 'submit', 'button', 'hidden', 'password'].includes(node.type) || node instanceof HTMLTextAreaElement && !node.readOnly);
-        if (!editable) continue;
+        if (!editable) {
+          if (key === 'phone') filled = await field.evaluate((node, expected) => node instanceof HTMLInputElement && node.readOnly && node.value.replace(/\D/g, '').replace(/^(?:91|0)(?=\d{10}$)/, '') === expected.replace(/\D/g, '').replace(/^(?:91|0)(?=\d{10}$)/, ''), value);
+          if (filled) break;
+          continue;
+        }
         // Keep country code selectors separate; portals' Indian mobile fields expect 10 digits.
         const text = key === 'phone' && /^\+?91[\d ()-]+$/.test(value) && value.replace(/\D/g, '').length === 12 ? value.replace(/\D/g, '').slice(2) : value;
         await field.fill(text);
         filled = true; break;
       }
       if (key === 'phone') filledPhone = filled;
-      if (!filled && key !== 'email') missing.push(key);
+      if (!filled && key !== 'email' && (present || key === 'phone')) missing.push(key);
     }
     const finalChallenge = await this.verifyCaptcha();
     if (finalChallenge.pending) return {ready: false, reason: finalChallenge.reason, baseline, verification: true};
@@ -368,12 +438,27 @@ export class PortalBrowser implements Driver {
     return {ready: filledPhone && !missing.length && !blocked, reason: blocked || (missing.length ? 'Missing form fields: ' + missing.join(', ') : !filledPhone ? 'Open the property contact form in Chrome.' : 'Contact fields filled.'), baseline};
   }
   async submit(item: Project): Promise<boolean> {
+    if (this.chatDraft) return submitPortalChat(this.page!, this.chatDraft);
+    if (item.site === 'nobroker' && this.visitReady) return submitNoBrokerVisit(this.page!);
     const definition = this.definitions[item.site];
-    return this.clickLabels(definition.submitLabels, definition.submitSelector);
+    if (this.submitScope) return this.clickLabels(definition.submitLabels, definition.submitSelector, this.submitScope);
+    const handle = await this.page!.evaluateHandle(({labels, selector}) => {
+      const candidates = selector ? [...document.querySelectorAll(selector)] : [...document.querySelectorAll('button,a[href],[role="button"],input[type="submit"],[onclick],[tabindex]')].filter(node => labels.some(label => label.toLowerCase() === ((node as HTMLInputElement).value || node.getAttribute('aria-label') || (node as HTMLElement).innerText || '').trim().toLowerCase()));
+      const usable = [...new Set(candidates)].filter(node => { const box = node.getBoundingClientRect(); const style = getComputedStyle(node); return box.width > 0 && box.height > 0 && style.visibility !== 'hidden' && style.pointerEvents !== 'none' && !node.matches(':disabled') && !node.closest('[hidden],[aria-hidden="true"],[aria-disabled="true"],[inert]'); });
+      return usable.length === 1 ? usable[0] : null;
+    }, {labels: definition.submitLabels, selector: definition.submitSelector});
+    const control = handle.asElement();
+    if (!control) { await handle.dispose(); return false; }
+    try { await control.click(); await this.settle(); return true; } finally { await handle.dispose(); }
   }
   async confirmed(item: Project, baseline: string[]): Promise<boolean> {
     const evidence = await this.evidence(item);
     return evidence.some(text => !baseline.includes(text));
+  }
+  async captureContacts(item: Project, config: Config): Promise<ContactCapture> {
+    const page = await this.start(config);
+    if (siteForUrl(page.url()) !== item.site && page.url() !== item.url) await this.navigate(item.url);
+    return capturePortalContacts(page, item, config, this.checkpoint);
   }
   async close(): Promise<void> {
     this.decisionController.abort();

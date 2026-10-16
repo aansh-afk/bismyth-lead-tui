@@ -1,15 +1,15 @@
 # Bismyth property enquiry TUI
 
-Interactive terminal app for property enquiry batches and public seller contacts. **Playwright** handles website logins and property interests, **Firecrawl** reads public listing contact details, and a separately hosted **Baileys router** handles explicitly confirmed WhatsApp introductions. Codex uses your saved ChatGPT login to classify public contacts and choose observed browser controls.
+Interactive terminal app for the Atlas sales funnel: share your selected callback details with real-estate sales teams, collect contacts revealed by the portals, and hand them to a separately hosted WhatsApp engine for qualification and manager referrals. **Playwright** handles website logins and property interests, **Firecrawl** reads public listing contact details, and a separately hosted **Baileys router** handles explicitly confirmed WhatsApp introductions. Codex uses your saved ChatGPT login to classify public contacts and choose observed browser controls.
 
 ## Install
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.18** from the GitHub release:
+Install **v0.1.19** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.18/bismyth-lead-tui-0.1.18.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.19/bismyth-lead-tui-0.1.19.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.18/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.19/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -51,7 +51,7 @@ Launch `bismyth-leads`. The first **Set up** page starts with **Website logins**
 
 Choose your **State / UT**, then choose the city from its India-only list. Enter your contact details and type **3** in Batch size. Press **F**, review the discovered properties, press **Enter**, and choose **Test forms**. Press **C** after browser handoffs, **K** to skip or **S** to stop. Test forms skips the final submit step; a logged-in site's contact entry point can itself initiate a portal action.
 
-Website login setup covers 99acres, NoBroker, Housing, Square Yards, Magicbricks, OLX and Quikr. The latter four currently have **login only**; saving their sessions does not add a listing/enquiry adapter. Saved observations say **Last verified**, not that a session is still authenticated. Login checks do not reload the page, submit credentials or invoke AI/CAPTCHA automation. Browser cookies stay in the private persistent profile; `accounts.json` stores only portal status and observation times. Skipping preserves existing browser data. **N** continues to the profile editor; discovery and URL imports use only selected listing websites whose latest TUI observation is **signed in**. Unconfirmed, signed-out, blocked, skipped and unchecked sites are excluded. If none qualify, the app returns to website logins without starting discovery. Saved website preferences are retained; activity and notices identify skipped sites. A recorded observation is not a guarantee that a session cannot expire later.
+Website login setup covers 99acres, NoBroker, Housing, Square Yards, Magicbricks, OLX and Quikr. All seven have catalogued listing and contact flows. Authenticated forms vary; an adapter or a saved login does not prove a live submission will succeed. OLX uses a seller message, and sites with unknown controls stop for a browser step. Discovery on OLX and Quikr outside Mumbai asks you to confirm the actual city/intent filter rather than assuming it from a keyword URL. Saved observations say **Last verified**, not that a session is still authenticated. Login checks do not reload the page, submit credentials or invoke AI/CAPTCHA automation. Browser cookies stay in the private persistent profile; `accounts.json` stores only portal status and observation times. Skipping preserves existing browser data. **N** continues to the profile editor; discovery and URL imports use only selected listing websites whose latest TUI observation is **signed in**. Unconfirmed, signed-out, blocked, skipped and unchecked sites are excluded. If none qualify, the app returns to website logins without starting discovery. Saved website preferences are retained; activity and notices identify skipped sites. A recorded observation is not a guarantee that a session cannot expire later.
 
 NoBroker checks recognise its signed-in profile icon even while the hover menu is closed. After signing in, select NoBroker in Set up and press **C**: a confirmed session shows **NoBroker login successful** in green. The check does not open the menu, click Sign Out or read account values.
 
@@ -71,12 +71,22 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.18.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.19.tgz`. A local build does not publish a GitHub or npm release.
+
+## Atlas lead-intake behavior
+
+The original meeting assigns this CLI to distributing your callback number across 100–300 property lead forms. The separate WhatsApp engine handles replies, company qualification and manager referrals. Scraped numbers are an additional source, and are not counted as completed enquiries or qualified Atlas leads.
+
+On Set up, enter `all` in Websites to include all seven portals; only selected portals with confirmed login observations are used. Existing preferences are retained unless you change them. Exact Contact controls are preferred over AI selection, and final submissions are scoped to the prepared form. A phone reveal or stale success message is not proof your details were sent.
+
+NoBroker may send Contact into its viewing scheduler. Test forms selects the latest available date/time without clicking Confirm Booking. Send enquiries can create a real appointment once, then reads the matching contact-history card. **This uses NoBroker's registered account number; it does not prove the callback number entered in the TUI was shared. Use an account registered with the intended callback number.** Existing visits/rescheduling and uncertain booking outcomes are not automatically retried.
+
+OLX seller messages contain an honest Atlas business introduction and the chosen callback phone/email. Test forms drafts only; Send enquiries clicks Send once and requires fresh outgoing-message evidence without a pending/failed status. This is portal UI confirmation, not proof a seller read or received the message. Contacts still need review and the existing Baileys send confirmation. This package does not deploy the external WhatsApp conversational agent or CRM.
 
 ## Guided workflow
 
 1. **Set up:** connect website accounts first, then **N** continues to the profile. Choose a State / UT, then a city from that state’s India-only list, followed by buy/rent, name, email, phone, websites and batch size. Type to filter either list; Enter selects it. Enter edits the other fields; Ctrl+U clears them. Left/right cycle buy/rent and batch presets. **F** finds properties only on selected websites with confirmed logins, after the required profile details are complete. **L** or the Website logins field returns to account setup.
-2. **Review queue:** discovery brings you here automatically. Scroll the properties, then press **Enter**. Choose **Test forms** to prepare forms without the final submit step, or **Send enquiries** to submit your supplied contact details. The dialog shows the queue size, location, name and phone before starting.
+2. **Review queue:** discovery brings you here automatically. Scroll the properties, then press **Enter**. Choose **Test forms** to prepare forms without the final submit step, or **Send enquiries** to submit your supplied contact details. The dialog shows the queue size, location, name and phone before starting. E explains the Atlas funnel and exact portal-message draft. Send may create real NoBroker viewing appointments; bookings are counted separately from confirmed callback interests.
 3. **Run & results:** follow progress and activity. If Chrome needs verification or extra fields, complete that browser step and press **C**. **K** skips it, **P** pauses/resumes, and **S** stops and saves progress. Results distinguish confirmed enquiries from tested forms and uncertain outcomes.
 4. **Saved runs:** Enter loads a previous run. **X** exports CSV; **J** exports JSON. **Q** saves progress and exits.
 5. **Contacts:** **H** collects a bounded number of public listing pages with Firecrawl. **E** shows source evidence, **A** toggles approval, **Space** selects contacts, and **W** reviews the selected WhatsApp batch. **Enter** reviews just the highlighted contact. The review dialog defaults to **Preview only**; sending requires choosing **Send reviewed introductions** and pressing Enter. **C** checks the router sender; **U** reconciles saved operations and refreshes replies. **O** exports contact CSV; **Shift+O** exports contact JSON.
@@ -115,7 +125,7 @@ Firecrawl requests public Markdown and links. Local parsing extracts complete In
 
 Firecrawl uses its own key and scrape allowance; Codex classification consumes your Codex account usage. The app does not request Firecrawl's AI JSON extraction. Public contact values and their evidence are supplied to Codex for classification. Hidden or masked numbers are not reconstructed, login pages and security challenges are reported, and a blocked page is not treated as a contact. Rate-limit, credit and credential failures stop the remaining provider requests without automatic retries.
 
-Contact collection and portal enquiries have separate results. A missing public number does not prevent a Playwright interest request, and an interest confirmation does not count as an extracted contact. Firecrawl uses the listings already in your queue; it does not add new portal discovery adapters, private inbox access or website login support. Square Yards, Magicbricks, OLX and Quikr remain login-only integrations.
+After a confirmed portal interest or seller message, Playwright reads visibly revealed listing contacts. NoBroker also checks the matching property on its contacted-properties page and uses the official desktop phone-copy control. Only that property is read. Authenticated evidence is labelled separately from public Firecrawl evidence; it is not uploaded to Firecrawl or the public-contact classifier. Collected numbers can be portal relays and begin with WhatsApp availability unchecked. Contact collection failure preserves a confirmed submission. H remains an optional public-page pass, and evidence/approval is retained when sources merge.
 
 ## Connect the Baileys router and review WhatsApp introductions
 

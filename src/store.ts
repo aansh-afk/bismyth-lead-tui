@@ -116,14 +116,19 @@ export class Store {
     }));
     const name = this.validId(run.id) + '.contacts.' + format;
     if (format === 'json') await this.write(name, {version: 1, runId: run.id, exportedAt: new Date().toISOString(), contacts: rows,
-      captureResults: run.projects.map(item => ({projectId: item.id, url: item.url, status: item.contactCapture?.status || 'pending', detail: item.contactCapture?.detail || 'Not collected'}))});
+      captureResults: run.projects.map(item => ({projectId: item.id, url: item.url, status: item.contactCapture?.status || 'pending', detail: item.contactCapture?.detail || 'Not collected',
+        ...(item.contactCapture?.collectionMethod ? {collectionMethod: item.contactCapture.collectionMethod} : {})}))});
     else {
       const cell = (value: string): string => '"' + (/^[=+@\-\t\r]/.test(value) ? "'" + value : value).replaceAll('"', '""') + '"';
-      const lines = ['contactId,kind,value,name,organization,role,review,whatsapp,sourceUrls,evidence,observedAt,projectIds,enquiryStatuses', ...rows.map(contact => [
+      const lines = ['contactId,kind,value,name,organization,role,review,whatsapp,sourceUrls,evidence,observedAt,projectIds,enquiryStatuses,sourceVisibilities,collectionMethods,listingUrls,sourceAttributions', ...rows.map(contact => [
         contact.id, contact.kind, contact.value, contact.name || '', contact.organization || '', contact.role || 'unknown', contact.review, contact.whatsapp,
-        [...new Set((contact.attributions || [contact]).map(source => source.sourceUrl))].join(' | '),
+        [...new Set((contact.attributions || [contact]).flatMap(source => [source.sourceUrl, ...(source.listingUrl ? [source.listingUrl] : [])]))].join(' | '),
         (contact.attributions || [contact]).map(source => source.evidence).join(' | '), contact.observedAt,
         contact.listings.map(item => item.projectId).join(' | '), contact.listings.map(item => item.enquiryStatus).join(' | '),
+        [...new Set((contact.attributions || [contact]).map(source => source.visibility ?? 'public'))].join(' | '),
+        [...new Set((contact.attributions || [contact]).map(source => source.collectionMethod ?? 'firecrawl'))].join(' | '),
+        [...new Set((contact.attributions || [contact]).flatMap(source => source.listingUrl ? [source.listingUrl] : []))].join(' | '),
+        JSON.stringify(contact.attributions || [contact]),
       ].map(cell).join(','))];
       await this.init(); const handle = await open(join(this.directory, name), 'w', 0o600);
       try { await handle.writeFile(lines.join('\r\n') + '\r\n'); await handle.sync(); } finally { await handle.close(); }

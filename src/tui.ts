@@ -19,6 +19,7 @@ import {choosePublicContacts} from './contact-ai.js';
 import {contactsForRun, OutreachService} from './outreach.js';
 import type {OutreachBook} from './outreach.js';
 import type {PublicContact} from './contacts.js';
+import {portalIntroduction} from './portal-chat.js';
 import {renderManagerIntroduction, WhatsAppRouter} from './whatsapp.js';
 export {clean} from './terminal-view.js';
 
@@ -30,8 +31,8 @@ const fields: Field[] = [
   {key: 'intent', label: 'Property intent', hint: 'buy or rent'},
   {key: 'name', label: 'Contact name', hint: 'Name supplied to the property form'},
   {key: 'email', label: 'Email', hint: 'Contact email address'},
-  {key: 'phone', label: 'Phone', hint: 'Phone number; +91 is supported'},
-  {key: 'sites', label: 'Websites', hint: 'Selected websites with confirmed logins only: 99acres,nobroker,housing'},
+  {key: 'phone', label: 'Callback number', hint: 'The number sales teams should call; +91 is supported'},
+  {key: 'sites', label: 'Websites', hint: 'all, or selected confirmed logins: ' + sites.join(',')},
   {key: 'limit', label: 'Batch size', hint: '1–300 projects; meeting target is 100–300'},
   {key: 'mode', label: 'Run mode', hint: 'preview fills forms; submit clicks the final submit control'},
   {key: 'delayMs', label: 'Delay (ms)', hint: '0–60000 milliseconds between projects'},
@@ -131,8 +132,15 @@ export class TerminalApp {
       } else if (text && !key.ctrl && !key.meta && !text.startsWith('\x1b')) { this.picker.query += text; this.picker.selected = 0; }
       this.render(); return;
     }
-    if (this.review !== undefined) {
+    if (this.review !== undefined && !this.details) {
       if (key.name === 'escape') this.review = undefined;
+      else if (key.name === 'q') { void this.shutdown(); return; }
+      else if (key.name === 'e') {
+        let introduction: string;
+        try { introduction = this.current ? portalIntroduction(this.current.config) : 'Load a property queue first.'; } catch { introduction = 'Complete your name and business in Set up before sending an Atlas introduction.'; }
+        this.notice = 'Atlas funnel: share your configured callback details, collect revealed contacts, then use the separate WhatsApp engine for qualification and manager referrals. NoBroker may create a real viewing booking using the signed-in account phone. Portal chat introduction: ' + introduction;
+        this.details = {offset: 0, message: this.notice};
+      }
       else if (key.name === 'up' || key.name === 'down') this.review = (this.review + (key.name === 'up' ? 2 : 1)) % 3;
       else if (key.name === 'return') {
         const choice = this.review; this.review = undefined;
@@ -347,8 +355,8 @@ export class TerminalApp {
       if (!Array.isArray(urls) || urls.some(url => typeof url !== 'string' || !siteForUrl(url))) throw new Error('Import file must contain supported portal URLs.');
       next.seedUrls = urls as string[]; this.importFile = value;
     } else if (field.key === 'sites') {
-      const selected = [...new Set(value.split(',').map(site => site.trim().toLowerCase()))];
-      if (!selected.length || selected.some(site => !sites.includes(site as Site))) throw new Error('Use 99acres,nobroker,housing separated by commas.');
+      const selected = value.toLowerCase() === 'all' ? [...sites] : [...new Set(value.split(',').map(site => site.trim().toLowerCase()))];
+      if (!selected.length || selected.some(site => !sites.includes(site as Site))) throw new Error('Use ' + sites.join(',') + ' separated by commas.');
       next.sites = selected as Site[];
     } else if (field.key === 'limit' || field.key === 'delayMs') {
       const number = Number(value);
@@ -390,9 +398,7 @@ export class TerminalApp {
     if (!allowed.length) {
       this.screen = 0; this.accountSetup = true; this.advanced = false;
       this.accountSelected = Math.max(0, portalAccounts.findIndex(portal => portal.id === this.config.sites[0]));
-      const loginOnly = portalAccounts.filter(portal => !portal.integrated && this.accounts.accounts.some(account => account.portal === portal.id && account.status === 'signed-in')).map(portal => portal.label);
-      throw new Error('No selected property website has a confirmed login. Open a website with Enter, log in, then C verifies it. Discovery needs NoBroker, Housing or 99acres.'
-        + (loginOnly.length ? ' ' + loginOnly.join(', ') + ' currently supports login only; no property discovery adapter is available.' : ''));
+      throw new Error('No selected property website has a confirmed login. Open a website with Enter, log in, then C verifies it. Discovery uses only your selected confirmed logins.');
     }
     return {config: {...this.config, sites: allowed, seedUrls: this.config.seedUrls.filter(url => { const site = siteForUrl(url); return site !== undefined && allowed.includes(site); })}, skipped};
   }
@@ -416,10 +422,11 @@ export class TerminalApp {
     this.animationFrame = 0; this.startedAt = Date.now(); this.elapsedMs = 0;
     this.runner = new Runner(this.current, this.store, new PortalBrowser(this.store.directory));
     this.runner.on('change', this.render); this.screen = 2;
-    this.notice = discover ? 'Discovering on verified websites: ' + this.current.config.sites.join(', ') + '.' + this.skippedSitesNotice(skipped) : 'Processing saved queue in ' + this.current.config.mode + ' mode…';
+    this.notice = discover ? 'Discovering on verified websites: ' + this.current.config.sites.join(', ') + '.' + this.skippedSitesNotice(skipped) : 'Atlas lead intake: ' + this.current.config.mode + ' mode. Confirmed interests share callback details; revealed contacts are collected separately.';
     this.task = (discover ? this.runner.discover() : this.runner.process()).then(async () => {
       this.history = await this.store.history(); this.selected[2] = Math.max(0, (this.current?.events.length || 0) - 1);
       if (discover) { this.screen = 1; this.selected[1] = 0; this.notice = (this.current?.projects.length ? 'Properties found. Review the list, then press Enter to choose a test or live run.' : 'No properties found. Check your city or import project URLs in Advanced settings.') + this.skippedSitesNotice(skipped); }
+      else if (this.current?.state === 'complete') this.notice = this.current.events.at(-1)?.message || 'Portal pass finished. 5 opens collected contacts for the separate WhatsApp follow-up.';
       this.render();
     });
   }
@@ -434,7 +441,7 @@ export class TerminalApp {
     const sources = contact.attributions || [contact];
     const history = this.outreach.entries.filter(entry => entry.to === contact.value && entry.senderSessionId === process.env.BISMYTH_WHATSAPP_SESSION_ID);
     this.notice = `${contact.value} · ${contact.name || contact.organization || 'Identity not supplied'} · ${contact.role || 'unknown role'} · ${contact.review}. `
-      + sources.map(source => `Source ${source.sourceUrl} · observed ${source.observedAt}. Evidence: ${source.evidence}`).join(' ')
+      + sources.map(source => `Source ${source.sourceUrl} · ${source.visibility || 'public'} / ${source.collectionMethod || 'firecrawl'}${source.listingUrl ? ' · listing ' + source.listingUrl : ''} · observed ${source.observedAt}. Evidence: ${source.evidence}`).join(' ')
       + history.map(entry => ` WhatsApp: ${entry.status}. ${entry.replies.map(reply => 'Reply: ' + reply.text).join(' ')} ${(entry.referrals || []).map(referral => 'Referral supplied in reply: ' + referral.phone).join(' ')}`).join(' ');
   }
   private introductionDetails(contacts: PublicContact[]): string {

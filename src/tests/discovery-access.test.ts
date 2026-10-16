@@ -54,11 +54,11 @@ test('discovery access normalizes corrupt and unobserved signed-in metadata befo
   assert.deepEqual(discoveryAccess(['housing'], duplicate as unknown as AccountSnapshot), {allowed: [], skipped: ['housing']}, 'a duplicate record cannot replace the first observation');
 });
 
-test('login-only Quikr cannot become a discovery adapter through saved preferences', () => {
+test('Quikr is available only when selected and its login is confirmed', () => {
   const snapshot = observations({quikr: 'signed-in'});
   assert.deepEqual(discoveryAccess(['nobroker', 'housing', '99acres'], snapshot), {allowed: [], skipped: ['nobroker', 'housing', '99acres']});
   // Runtime data may be stale or malformed even though Config.sites is typed.
-  assert.deepEqual(discoveryAccess(['quikr' as Site], snapshot), {allowed: [], skipped: ['quikr']});
+  assert.deepEqual(discoveryAccess(['quikr'], snapshot), {allowed: ['quikr'], skipped: []});
 });
 
 interface Controller {

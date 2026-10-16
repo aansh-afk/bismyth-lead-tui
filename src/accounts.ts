@@ -10,10 +10,10 @@ export const portalAccounts: readonly {id: AccountPortal; label: string; url: st
   {id: '99acres', label: '99acres', url: 'https://www.99acres.com/', integrated: true},
   {id: 'nobroker', label: 'NoBroker', url: 'https://www.nobroker.in/', integrated: true},
   {id: 'housing', label: 'Housing', url: 'https://housing.com/', integrated: true},
-  {id: 'squareyards', label: 'Square Yards', url: 'https://www.squareyards.com/', integrated: false},
-  {id: 'magicbricks', label: 'Magicbricks', url: 'https://www.magicbricks.com/', integrated: false},
-  {id: 'olx', label: 'OLX', url: 'https://www.olx.in/', integrated: false},
-  {id: 'quikr', label: 'Quikr', url: 'https://www.quikr.com/', integrated: false},
+  {id: 'squareyards', label: 'Square Yards', url: 'https://www.squareyards.com/', integrated: true},
+  {id: 'magicbricks', label: 'Magicbricks', url: 'https://www.magicbricks.com/', integrated: true},
+  {id: 'olx', label: 'OLX', url: 'https://www.olx.in/', integrated: true},
+  {id: 'quikr', label: 'Quikr', url: 'https://www.quikr.com/', integrated: true},
 ];
 
 const statuses: readonly AccountStatus[] = ['unchecked', 'signed-in', 'signed-out', 'unknown', 'blocked', 'skipped'];

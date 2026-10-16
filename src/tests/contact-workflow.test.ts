@@ -172,7 +172,7 @@ test('Contacts and active collection render at supported sizes without enquiry-s
   const run = queued(); run.projects[0].contactCapture = capture(); run.projects[0].contactCapture!.contacts[0].name = '\x1b[2JUntrusted';
   for (const [width, height] of [[70, 22], [80, 24], [100, 30], [180, 40]]) {
     const view = {width, height, screen: 4, selected: [0, 0, 0, 0, 0], config, run, history: [], fields: [], advanced: false, notice: '', help: false, handoff: '', active: false, auth: 'ChatGPT subscription connected', contacts: contactsForRun(run), firecrawlStatus: 'Key configured', routerStatus: 'Not configured'};
-    const output = renderView(view); assert.ok(output.includes('Public contacts')); assert.ok(output.includes('+919876543210')); assert.equal(output.includes('\x1b[2J'), false);
+    const output = renderView(view); assert.ok(output.includes('Contacts → Atlas outreach')); assert.ok(output.includes('+919876543210')); assert.equal(output.includes('\x1b[2J'), false);
     assert.ok(output.split('\r\n').length <= height);
     const active = renderView({...view, screen: 2, active: true, run: {...run, state: 'enriching'}});
     assert.ok(active.includes('Collecting contacts')); assert.equal(active.includes('Sending enquiries'), false);

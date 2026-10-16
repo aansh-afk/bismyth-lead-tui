@@ -8,7 +8,10 @@ import {tmpdir} from 'node:os';
 import {PortalBrowser, browserPath} from '../browser.js';
 import {createRun, defaults, project, sites, counts} from '../model.js';
 import {Runner} from '../runner.js';
+import {portalCatalog} from '../portal-catalog.js';
 import {Store} from '../store.js';
+
+const enquirySites = sites.filter(site => portalCatalog[site].contactMode === 'enquiry');
 
 for (const size of [100, 200, 300]) test(`full browser batch: ${size} confirmed fixture submissions`, {timeout: 300000}, async t => {
   const directory = await mkdtemp(join(tmpdir(), 'bismyth-batches-'));
@@ -21,8 +24,8 @@ for (const size of [100, 200, 300]) test(`full browser batch: ${size} confirmed 
     const id = request.url!.split('/').pop();
     response.setHeader('Content-Type', 'text/html');
     response.end(`<!doctype html><title>Fixture ${id}</title><button onclick="document.querySelector('form').hidden=false">Contact</button>
-      <form hidden onsubmit="event.preventDefault(); fetch('/submit/${id}', {method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(this)))}).then(()=>document.querySelector('p').textContent='Thank you for your enquiry.')">
-      <input name="name" required><input name="phone" type="tel" required><input name="email" type="email" required><button>Send Enquiry</button></form><p></p>`);
+      <form hidden onsubmit="event.preventDefault(); fetch('/submit/${id}', {method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(this)))}).then(()=>{document.querySelector('p').textContent='Thank you for your enquiry.'; document.querySelector('[data-contact-details]').hidden=false})">
+      <input name="name" required><input name="phone" type="tel" required><input name="email" type="email" required><button>Send Enquiry</button></form><p></p><section data-contact-details hidden>Seller contact: +919876543210</section>`);
   });
   server.listen(0, '127.0.0.1'); await once(server, 'listening');
   const address = server.address(); assert.ok(address && typeof address === 'object');
@@ -34,7 +37,7 @@ for (const size of [100, 200, 300]) test(`full browser batch: ${size} confirmed 
   t.signal.addEventListener('abort', () => { void activeRunner?.stop(); }, {once: true});
   try {
       const run = createRun({...config, limit: size, mode: 'submit'});
-      run.projects = Array.from({length: size}, (_, index) => project(sites[index % sites.length], `Batch ${size} / ${index}`, `${base}/form/${size}-${index}`));
+      run.projects = Array.from({length: size}, (_, index) => project(enquirySites[index % enquirySites.length], `Batch ${size} / ${index}`, `${base}/form/${size}-${index}`));
       if (size === 100) {
         const preview = createRun({...config, limit: 100, mode: 'preview'}); preview.projects = structuredClone(run.projects);
         activeRunner = new Runner(preview, store, driver); await activeRunner.process();
@@ -45,6 +48,7 @@ for (const size of [100, 200, 300]) test(`full browser batch: ${size} confirmed 
       activeRunner = new Runner(run, store, driver); await activeRunner.process();
       assert.equal(run.state, 'complete'); assert.equal(counts(run).submitted, size);
       assert.equal(counts(run).failed + counts(run).uncertain, 0);
+      assert.equal(run.projects.filter(item => item.contactCapture?.status === 'captured').length, size, 'each confirmed form retains seller contact evidence');
       for (let index = 0; index < size; index++) assert.deepEqual(received.get(`/submit/${size}-${index}`), {name: 'Batch Tester', phone: '9000000000', email: 'batch@example.test'});
       const saved = await store.load(run.id); assert.equal(counts(saved).submitted, size);
       const before = received.size; await new Runner(saved, store, driver).process(); assert.equal(received.size, before);

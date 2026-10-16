@@ -335,3 +335,21 @@ test('account-check failures show a fixed diagnostic rather than driver tokens o
   assert.equal(app.accountSetup, true);
   await assertProfileUnchanged(store, originalConfig, config);
 });
+
+test('the Websites editor accepts all seven portals without changing the callback profile', async t => {
+  const {app, store, config} = await fixture(t);
+  app.accountSetup = false; app.selected[0] = 7;
+  press(app, 'return');
+  app.keypress(undefined, {name: 'u', ctrl: true});
+  app.keypress('all', {});
+  press(app, 'return');
+  const deadline = Date.now() + 5000;
+  while (app.busy && Date.now() < deadline) await setImmediate();
+  assert.equal(app.busy, false);
+  const saved = await store.config();
+  assert.deepEqual(saved.sites, portalAccounts.map(portal => portal.id));
+  for (const field of ['name', 'email', 'phone', 'stateCode', 'city'] as const) assert.equal(saved[field], config[field]);
+  assert.deepEqual(await store.accounts(), blankAccounts(), 'choosing sites cannot fabricate login observations');
+  assert.equal(app.current, undefined);
+  assert.equal(app.runner, undefined);
+});

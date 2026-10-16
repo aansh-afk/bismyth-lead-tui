@@ -39,7 +39,9 @@ function approvedPhones(contacts: PublicContact[]): PublicContact[] {
     && (contact.reviewedBy === 'operator' || ['owner', 'broker', 'developer', 'sales', 'agency'].includes(contact.role || ''))
     && normalizeIndianPhone(contact.value) === contact.value));
 }
-function sourceUrls(contact: PublicContact): string[] { return [...new Set([contact.sourceUrl, ...(contact.attributions ?? []).map(item => item.sourceUrl)])]; }
+function sourceUrls(contact: PublicContact): string[] {
+  return [...new Set([contact, ...(contact.attributions ?? [])].flatMap(item => [item.sourceUrl, ...(item.listingUrl ? [item.listingUrl] : [])]))];
+}
 function matchingEntry(book: OutreachBook, sessionId: string, number: string): OutreachEntry | undefined {
   return book.entries.find(entry => entry.senderSessionId === sessionId && entry.to === number && (entry.purpose === purpose || entry.status === 'opted-out'));
 }
@@ -104,7 +106,7 @@ export class OutreachService {
         result.push({...item, status: 'skipped', detail: 'An introduction or opt-out already exists for this sender and contact.'}); continue;
       }
       const availability = await this.#router.checkContact(contact.value, signal);
-      if (!availability.onWhatsApp) { result.push({...item, status: 'unavailable', detail: 'This public number is not available on WhatsApp.'}); continue; }
+      if (!availability.onWhatsApp) { result.push({...item, status: 'unavailable', detail: 'This number is not available on WhatsApp.'}); continue; }
       await this.#router.preview({to: contact.value, message, clientRequestId: randomUUID()}, signal);
       result.push(item);
     }
@@ -120,7 +122,7 @@ export class OutreachService {
         signal?.throwIfAborted();
         if (matchingEntry(book, this.#sessionId, contact.value)) { await onProgress('WhatsApp introduction skipped: this sender already has a saved operation or opt-out for the contact.'); continue; }
         const availability = await this.#router.checkContact(contact.value, signal);
-        if (!availability.onWhatsApp) { await onProgress('Public number is not available on WhatsApp; no message sent.'); continue; }
+        if (!availability.onWhatsApp) { await onProgress('Number is not available on WhatsApp; no message sent.'); continue; }
         await onProgress('Saving the exact WhatsApp introduction and request ID before sending.');
         signal?.throwIfAborted();
         const now = new Date().toISOString();

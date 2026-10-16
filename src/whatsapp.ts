@@ -284,5 +284,5 @@ export function renderManagerIntroduction(input: {senderName: string; senderBusi
   if (!senderName || !senderBusiness || [senderName, senderBusiness, contactName ?? ''].some(value => /[\r\n\u0000-\u001f\u007f]/.test(value) || value.length > 150)) {
     throw new WhatsAppRouterError('Set your name and business before preparing an introduction.', 'INVALID_REQUEST');
   }
-  return `Hi${contactName ? ' ' + contactName : ''}, ${senderName} here from ${senderBusiness}. I'm reaching out about sales operations and business partnerships. Are you the right person to speak with, or could you introduce me to your sales manager, agency owner or business head?\n\nYou're welcome to forward this message. If they're happy to be contacted, their official work number would help. Thanks!`;
+  return `Hi${contactName ? ' ' + contactName : ''}, ${senderName} here from ${senderBusiness}. I'm reaching out about Atlas for real-estate sales operations and business partnerships. Are you the right person to speak with, or could you introduce me to your sales manager, agency owner or business head?\n\nYou're welcome to forward this message. If they're happy to be contacted, their official work number would help. Thanks!`;
 }

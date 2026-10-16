@@ -5,6 +5,7 @@ import {duplicateKey} from './model.js';
 import type {Project, ProjectStatus, Run} from './model.js';
 import {Store} from './store.js';
 import type {FirecrawlClient} from './firecrawl.js';
+import {deduplicateContacts} from './contacts.js';
 
 export class RunStopped extends Error { constructor() { super('Run stopped.'); } }
 export class Runner extends EventEmitter {
@@ -137,15 +138,15 @@ export class Runner extends EventEmitter {
       for (const item of this.run.projects) {
         await this.checkpoint();
         if (requested >= maximumRequests) break;
-        if (item.contactCapture && ['captured', 'not-found'].includes(item.contactCapture.status)) continue;
+        if (item.contactCapture?.status === 'captured' || item.contactCapture?.status === 'not-found' && item.contactCapture.collectionMethod !== 'playwright') continue;
         const retained = item.contactCapture?.contacts || [];
         item.contactCapture = {status: 'working', attemptedAt: new Date().toISOString(), detail: 'Reading the public listing with Firecrawl.', contacts: retained};
         await this.record(`${item.site}: collecting public contact details (${++requested}/${maximumRequests}).`);
         try {
           const capture = await client.capture({url: item.url, title: item.title}, this.controller.signal);
           await this.checkpoint();
-          item.contactCapture = capture;
-          if (!capture.contacts.length && ['blocked', 'failed'].includes(capture.status)) item.contactCapture.contacts = retained;
+          item.contactCapture = {...capture, collectionMethod: 'firecrawl', contacts: deduplicateContacts([...retained, ...capture.contacts])};
+          if (item.contactCapture.contacts.length) item.contactCapture.status = 'captured';
           await this.record(`${item.site}: ${capture.detail}`);
           if (capture.stopBatch) { await this.record('Contact pass stopped at the provider limit. Remaining pages were not requested.'); break; }
         } catch (error) {
@@ -173,6 +174,23 @@ export class Runner extends EventEmitter {
     item.status = status; item.detail = detail; item.updatedAt = new Date().toISOString();
     await this.record(item.site + ' / ' + status + ': ' + item.title);
   }
+  private async captureRevealedContacts(item: Project): Promise<void> {
+    if (!this.driver.captureContacts) return;
+    await this.checkpoint();
+    const retained = item.contactCapture?.contacts || [];
+    try {
+      const capture = await this.driver.captureContacts(item, this.run.config);
+      item.contactCapture = {...capture, collectionMethod: 'playwright', contacts: deduplicateContacts([...retained, ...capture.contacts])};
+      if (item.contactCapture.contacts.length) item.contactCapture.status = 'captured';
+      await this.record(item.site + ': ' + capture.detail);
+    } catch {
+      item.contactCapture = {status: retained.length ? 'captured' : 'failed', attemptedAt: new Date().toISOString(), detail: 'Portal contact collection did not finish. The confirmed interest or booking was retained.', contacts: retained};
+      await this.store.save(this.run);
+      if (this.stopped || this.controller.signal.aborted) throw new RunStopped();
+      await this.record(item.site + ': contact collection failed; confirmed submission retained.');
+    }
+    await this.checkpoint();
+  }
   async process(): Promise<void> {
     await this.execute(async () => {
       this.run.state = 'running'; await this.record('Starting ' + this.run.config.mode + ' run.');
@@ -188,17 +206,30 @@ export class Runner extends EventEmitter {
         try {
           let preparation = await this.driver.prepare(item, this.run.config);
           await this.checkpoint();
-          const baseline = preparation.baseline;
-          while (!preparation.ready) {
+          if (preparation.alreadyShared) {
+            await this.mark(item, 'skipped', 'The same Atlas introduction is already visible in this conversation; no duplicate was sent.');
+            continue;
+          }
+          let baseline = preparation.baseline;
+          item.contactAction = {kind: preparation.actionKind || 'interest', summary: preparation.summary || 'Share the configured callback details through the property portal.'};
+          while (!preparation.ready && !preparation.alreadyShared) {
             const answer = await this.handoff(preparation.reason + ' Complete the form in Chrome; c rechecks, k skips.', preparation.verification);
             if (answer === 'skip') { await this.mark(item, 'skipped', preparation.reason); break; }
-            if (this.run.config.mode === 'submit' && await this.driver.confirmed(item, baseline)) { await this.mark(item, 'submitted', 'New portal confirmation observed after browser handoff.'); break; }
+            if (this.run.config.mode === 'submit' && preparation.allowHandoffConfirmation !== false && await this.driver.confirmed(item, baseline)) { await this.mark(item, 'submitted', 'New portal confirmation observed after browser handoff.'); break; }
             preparation = await this.driver.prepare(item, this.run.config, false);
+            baseline = preparation.baseline;
           }
-          if ((item.status as ProjectStatus) !== 'working') continue;
+          if (preparation.alreadyShared && (item.status as ProjectStatus) === 'working') {
+            await this.mark(item, 'skipped', 'The same Atlas introduction is already visible in this conversation; no duplicate was sent.');
+          }
+          if ((item.status as ProjectStatus) !== 'working') {
+            if ((item.status as ProjectStatus) === 'submitted') await this.captureRevealedContacts(item);
+            continue;
+          }
+          item.contactAction = {kind: preparation.actionKind || 'interest', summary: preparation.summary || 'Share the configured callback details through the property portal.'};
           await this.checkpoint();
           if (this.run.config.mode === 'preview') {
-            await this.mark(item, 'prepared', 'Contact form prepared; submit was not clicked.');
+            await this.mark(item, 'prepared', preparation.actionKind === 'visit-booking' ? 'Viewing slot selected for review; Confirm Booking was not clicked.' : preparation.actionKind === 'portal-message' ? 'Atlas introduction and callback details drafted; Send was not clicked.' : 'Contact form prepared; submit was not clicked.');
           } else {
             // Checkpoint working before any click; interruption recovers as uncertain.
             submitted = true;
@@ -227,15 +258,23 @@ export class Runner extends EventEmitter {
               confirmed = await this.driver.confirmed(item, baseline);
             }
             await this.mark(item, confirmed ? 'submitted' : 'uncertain', confirmed ? 'New portal confirmation observed.' : 'No new confirmation observed; inspect before retrying.');
-            if (confirmed) previous.add(duplicateKey(this.run.config, item));
+            if (confirmed) {
+              previous.add(duplicateKey(this.run.config, item));
+              await this.captureRevealedContacts(item);
+            }
           }
         } catch (error) {
-          await this.mark(item, submitted || this.stopped ? 'uncertain' : 'failed', (error as Error).message);
+          if ((item.status as ProjectStatus) !== 'submitted') await this.mark(item, submitted || this.stopped ? 'uncertain' : 'failed', (error as Error).message);
           if (this.stopped) throw new RunStopped();
         }
         if (this.run.config.delayMs) await sleep(this.run.config.delayMs, undefined, {signal: this.controller.signal});
       }
-      this.run.state = 'complete'; await this.record('Run finished.');
+      this.run.state = 'complete';
+      const confirmed = this.run.projects.filter(item => item.status === 'submitted');
+      const bookings = confirmed.filter(item => item.contactAction?.kind === 'visit-booking').length;
+      const messages = confirmed.filter(item => item.contactAction?.kind === 'portal-message').length;
+      const numbers = deduplicateContacts(this.run.projects.flatMap(item => item.contactCapture?.contacts || [])).length;
+      await this.record(`Run finished. ${confirmed.length - bookings - messages} confirmed interests; ${messages} portal messages; ${bookings} viewing bookings; ${numbers} contacts collected. WhatsApp follow-up is separate; 5 opens Contacts.`);
     });
   }
   private async execute(task: () => Promise<void>): Promise<void> {

@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {accountPortalIds, accountStatusDetails, blankAccounts, normalizeAccounts, portalAccounts} from '../accounts.js';
 
-test('all website accounts are separate from the three enquiry adapters', () => {
+test('all seven website accounts have catalogued listing adapters', () => {
   assert.deepEqual(portalAccounts.map(item => item.id), [...accountPortalIds]);
-  assert.deepEqual(portalAccounts.filter(item => item.integrated).map(item => item.id), ['99acres', 'nobroker', 'housing']);
+  assert.deepEqual(portalAccounts.filter(item => item.integrated).map(item => item.id), [...accountPortalIds]);
   assert.deepEqual(blankAccounts().accounts.map(item => item.status), Array(7).fill('unchecked'));
   const first = blankAccounts(); first.accounts[0].status = 'skipped';
   assert.equal(blankAccounts().accounts[0].status, 'unchecked');

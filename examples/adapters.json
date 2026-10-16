@@ -7,7 +7,7 @@
     }
   },
   "nobroker": {
-    "openSelector": "#getOwnerDetails"
+    "openSelector": "button#getOwnerDetails:text-is(\"Contact\")"
   },
   "housing": {
     "fields": {

@@ -4,6 +4,10 @@ export type ContactRole = 'owner' | 'broker' | 'developer' | 'sales' | 'agency' 
 export interface ContactAttribution {
   sourceUrl: string; evidence: string; observedAt: string;
   name?: string; organization?: string; role?: ContactRole;
+  /** Missing provenance denotes a public Firecrawl source in saved version-1 runs. */
+  visibility?: 'public' | 'authenticated';
+  collectionMethod?: 'firecrawl' | 'playwright';
+  listingUrl?: string;
 }
 export interface PublicContact extends ContactAttribution {
   id: string; kind: 'phone' | 'email' | 'whatsapp'; value: string; raw: string;
@@ -14,6 +18,7 @@ export interface PublicContact extends ContactAttribution {
 export interface ContactCapture {
   status: 'working' | 'captured' | 'not-found' | 'blocked' | 'failed';
   attemptedAt: string; detail: string; contacts: PublicContact[];
+  collectionMethod?: 'firecrawl' | 'playwright';
   stopBatch?: boolean;
 }
 export interface ContactSelection {
@@ -39,10 +44,13 @@ function contactId(kind: PublicContact['kind'], value: string): string {
   return createHash('sha256').update(`${kind === 'email' ? 'email' : 'phone'}:${value}`).digest('hex').slice(0, 24);
 }
 function attribution(contact: ContactAttribution): ContactAttribution {
-  const {sourceUrl, evidence, observedAt, name, organization, role} = contact;
-  return {sourceUrl, evidence, observedAt, ...(name ? {name} : {}), ...(organization ? {organization} : {}), ...(role ? {role} : {})};
+  const {sourceUrl, evidence, observedAt, name, organization, role, visibility, collectionMethod, listingUrl} = contact;
+  return {sourceUrl, evidence, observedAt, ...(name ? {name} : {}), ...(organization ? {organization} : {}), ...(role ? {role} : {}),
+    ...(visibility ? {visibility} : {}), ...(collectionMethod ? {collectionMethod} : {}), ...(listingUrl ? {listingUrl} : {})};
 }
-function attributionKey(value: ContactAttribution): string { return `${value.sourceUrl}\n${value.evidence}`; }
+function attributionKey(value: ContactAttribution): string {
+  return JSON.stringify([value.sourceUrl, value.evidence, value.visibility ?? 'public', value.collectionMethod ?? 'firecrawl', value.listingUrl ?? '']);
+}
 
 /** Same mobile across phone/WhatsApp links or listings is one contact, with all its sources. */
 export function deduplicateContacts(contacts: readonly PublicContact[]): PublicContact[] {
@@ -63,6 +71,7 @@ export function deduplicateContacts(contacts: readonly PublicContact[]): PublicC
       ...preferred, id: contactId(contact.kind, contact.value),
       kind: existing.kind === 'whatsapp' || contact.kind === 'whatsapp' ? 'whatsapp' : preferred.kind,
       review: existing.review === 'approved' || contact.review === 'approved' ? 'approved' : 'needs-review',
+      ...((existing.review === 'approved' && existing.reviewedBy === 'operator') || (contact.review === 'approved' && contact.reviewedBy === 'operator') ? {reviewedBy: 'operator' as const} : {}),
       attributions,
     });
   }
@@ -163,4 +172,17 @@ export function extractPublicContacts(document: ContactDocument): PublicContact[
     } catch { /* Ignore malformed links and unsupported URL schemes. */ }
   }
   return deduplicateContacts(contacts).slice(0, 50);
+}
+
+/** Parse only the visible, listing-matched DOM evidence supplied by the browser adapter. */
+export function extractBrowserContacts(document: ContactDocument & {listingUrl: string; visibility: 'public' | 'authenticated'}): PublicContact[] {
+  if (!['public', 'authenticated'].includes(document.visibility)) throw new Error('Browser contact visibility must be public or authenticated.');
+  const listing = new URL(document.listingUrl);
+  if (!['http:', 'https:'].includes(listing.protocol) || listing.username || listing.password) throw new Error('Browser contacts require an http(s) listing URL without credentials.');
+  listing.hash = '';
+  const provenance = {visibility: document.visibility, collectionMethod: 'playwright' as const, listingUrl: listing.href};
+  return extractPublicContacts(document).map(contact => ({...contact, ...provenance,
+    role: 'unknown', review: 'needs-review', whatsapp: 'unchecked',
+    attributions: (contact.attributions ?? [attribution(contact)]).map(source => ({...source, ...provenance})),
+  }));
 }
