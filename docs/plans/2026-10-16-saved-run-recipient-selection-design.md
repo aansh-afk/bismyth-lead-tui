@@ -1,0 +1,11 @@
+# Saved-run WhatsApp recipient selection
+
+The user requested a way to choose which people receive WhatsApp messaging from saved runs before receiving the remaining-issues review. The existing Contacts screen has transient checkboxes, but loading another run does not isolate them and Enter reviews the focused contact independently of its checkbox.
+
+Use the existing Contacts screen rather than a second recipient picker or a global blacklist. Saved runs → W opens the highlighted run's recipients; Enter retains queue loading. Space toggles an approved Indian phone, B selects all approved phones, and Z clears the run's choices. Enter and W both review only checked recipients. The existing draft dialog defaults to preview; sending still requires its explicit Send choice. Selecting or clearing contacts makes no router call.
+
+Persist optional `Run.outreachSelection.contactIds` using canonical, deduplicated contact IDs. Old runs and newly created/copied runs start with nobody selected. Choices belong to a run and survive restart. New collected contacts remain unchecked. Contact approval concerns identity/evidence; it remains separate from the choice to include someone in a batch.
+
+Preview and send intersect the requested contacts, the current saved run's approved canonical contacts and its explicit selection. Use canonical run evidence, not caller-supplied provenance. Empty or malformed selection produces no requests. Recheck choices after asynchronous availability/progress steps and reject a stale review when its run or recipients change. Global sender/number deduplication, uncertain operation retention and opt-outs continue to veto sends. Deselection does not prevent receipt/opt-out ingestion for past operations.
+
+Verify recipient exclusion at the actual loopback HTTP boundary, persistence and run isolation with temporary stores, keyboard handling and modal defaults through the controller, rendering at supported sizes, and the installed command through a real pseudo-terminal. Run the configured regression suite and record measured results and live-integration limitations in a Markdown report. Publish the tested package and update the existing local installation while preserving user data and running sessions.
