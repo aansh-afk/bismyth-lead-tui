@@ -60,7 +60,7 @@ async function dates(calendar: Locator): Promise<{control: Locator; epoch: numbe
   let previousMonth = Number(now.find(part => part.type === 'month')!.value) - 1;
   const result: {control: Locator; epoch: number; label: string}[] = [];
   for (const entry of raw) {
-    const day = /^(\d{1,2})(?:\s+(?:Today|Sun|Mon|Tue|Wed|Thu|Fri|Sat))?$/i.exec(entry.label)?.[1];
+    const day = /^(\d{1,2})(?:\s*(?:Today|Sun|Mon|Tue|Wed|Thu|Fri|Sat))?$/i.exec(entry.label)?.[1];
     const explicit = /^(\d{4})-(\d{2})-(\d{2})(?:T.*)?$/.exec(entry.full);
     const month = entry.marker ? months.indexOf(entry.marker.slice(0, 3).toLowerCase()) : -1;
     if (!explicit && (!day || month < 0)) continue;

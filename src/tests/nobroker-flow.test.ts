@@ -12,7 +12,7 @@ body {font-family:sans-serif} .pointer-events-none {pointer-events:none} button 
 </style></head><body><button id="outside" onclick="window.outsideClicks++">Confirm Booking</button>
 <div id="modal"><div class="schedule-visit-header-container">Schedule your FREE visit</div>
 <div class="schedule-modal-content-container"><div class="calender-compoent">
-<div><h2>Pick a Date</h2><div id="days"><div>DEC</div><button id="dec30">30 Wed</button><button id="dec31">31 Thu</button><div>JAN</div><button id="jan1">1 Fri</button><button id="jan2" class="pointer-events-none">2 Sat</button><button id="jan3" disabled>3 Sun</button></div></div>
+<div><h2>Pick a Date</h2><div id="days"><div><div><div>DEC</div></div></div><button id="dec30"><span>30</span><span>Wed</span></button><button id="dec31"><span>31</span><span>Thu</span></button><div><div><div>JAN</div></div></div><button id="jan1"><span>1</span><span>Fri</span></button><button id="jan2" class="pointer-events-none"><span>2</span><span>Sat</span></button><button id="jan3" disabled><span>3</span><span>Sun</span></button></div></div>
 <div id="times"></div><button id="confirm" hidden>Confirm Booking</button></div></div></div>
 <div id="scheduleVisitModalConfirmation" hidden></div><div id="unrelated">Your visit is scheduled tomorrow</div>
 <script>
@@ -118,5 +118,35 @@ test('NoBroker refuses final submission if the prepared time or page has changed
     await page.locator('.schedule-visit-header-container').evaluate(node => {node.textContent = 'Reschedule your FREE visit';});
     assert.equal(await submitNoBrokerVisit(page), false, 'reschedule never inherits a previous preparation');
     assert.equal(await page.evaluate(() => (window as unknown as {bookingPosts: number}).bookingPosts), 0);
+  } finally {await browser.close();}
+});
+
+test('NoBroker reads adjacent date spans and ignores the separate Join Visit card', {timeout: 30000}, async () => {
+  const browser = await chromium.launch({headless: true, executablePath: await browserPath()});
+  const page = await browser.newPage();
+  try {
+    await page.setContent(fixture);
+    await page.evaluate(() => {
+      for (const node of document.querySelector('#days')!.children) {
+        if (!node.matches('button')) node.innerHTML = '<div><div>OCT</div></div>';
+      }
+      for (const [id, day, weekday] of [['dec30', '16', 'Today'], ['dec31', '19', 'Mon'], ['jan1', '20', 'Tue'], ['jan2', '21', 'Wed'], ['jan3', '22', 'Thu']]) {
+        document.getElementById(id)!.innerHTML = `<span>${day}</span><span>${weekday}</span>`;
+      }
+      const join = document.createElement('section');
+      join.innerHTML = '<p>Already scheduled group visit: 22 October at 9:00 PM</p><button id="join-visit">Join Visit</button>';
+      const host = window as unknown as {joinClicks: number};host.joinClicks = 0;
+      join.querySelector<HTMLButtonElement>('button')!.onclick = () => {host.joinClicks++;};
+      document.querySelector('.schedule-modal-content-container')!.prepend(join);
+    });
+    assert.equal(await page.locator('#dec30').textContent(), '16Today', 'fixture preserves the production DOM with no separating text node');
+    const preparation = await prepareNoBrokerVisit(page, async () => undefined);
+    assert.equal(preparation.detected, true);assert.equal(preparation.ready, true);
+    assert.match(preparation.summary!, /20 oct \d{4} at 8:00 PM/);
+    assert.deepEqual(await page.evaluate(() => (window as unknown as {dateClicks: string[]}).dateClicks), ['jan1']);
+    assert.deepEqual(await page.evaluate(() => (window as unknown as {timeClicks: string[]}).timeClicks), ['8:00 PM']);
+    assert.equal(await page.evaluate(() => (window as unknown as {joinClicks: number}).joinClicks), 0);
+    assert.equal(await page.evaluate(() => (window as unknown as {bookingPosts: number}).bookingPosts), 0);
+    assert.equal(await page.evaluate(() => (window as unknown as {outsideClicks: number}).outsideClicks), 0);
   } finally {await browser.close();}
 });

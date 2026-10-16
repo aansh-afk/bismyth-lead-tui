@@ -1,6 +1,6 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Interactive property enquiry CLI with Playwright and ChatGPT-backed Codex decisions",
   "license": "MIT",
   "repository": {

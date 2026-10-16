@@ -6,10 +6,10 @@ Interactive terminal app for the Atlas sales funnel: share your selected callbac
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.19** from the GitHub release:
+Install **v0.1.20** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.19/bismyth-lead-tui-0.1.19.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.20/bismyth-lead-tui-0.1.20.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.19/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.20/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -71,7 +71,7 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.19.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.20.tgz`. A local build does not publish a GitHub or npm release.
 
 ## Atlas lead-intake behavior
 

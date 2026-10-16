@@ -18,3 +18,7 @@ Keep enquiry confirmation, phone collection, WhatsApp delivery and manager refer
 ## Verification
 
 Use official public pages/assets and the user's screenshots to derive selectors, then exercise real Chromium against loopback fixtures for each adapter, scheduler, submission evidence and contact association. Verify Preview performs no final submission, submit confirms once, stale success does not count, invalid/hidden/unrelated numbers are excluded, and capture failure does not erase confirmed submissions. Build and regression checks must pass before publishing and updating the local command. Do not create real viewing appointments, live enquiries or WhatsApp messages as part of development verification.
+
+## NoBroker date-label compatibility correction
+
+The October 16 screenshot and current official ScheduleVisitNew asset show adjacent day/weekday spans with no separating text node (`16Today`, `21Wed`). Retain Playwright and the existing scoped scheduler; allow zero or more whitespace characters only between the strict numeric day and known weekday/Today suffix. Keep month/date validation, disabled-control filtering, latest-date/time selection, explicit final booking and duplicate protection unchanged. Match production markup in both helper and Runner/PortalBrowser fixtures, including the independent Join Visit card. This is a correction to the already authorized scheduling flow.
