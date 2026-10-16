@@ -39,6 +39,26 @@ function assertHandoffControls(view: View): void {
   }
 }
 
+test('pending NoBroker requests remain separate from visits and interests at supported terminal sizes', () => {
+  for (const [width, height] of sizes) {
+    const view = {...fixture(width, height), handoff: '', active: false};
+    view.run!.state = 'complete';
+    view.run!.projects = [
+      {...project('nobroker', 'Pending fixture', 'https://www.nobroker.in/property/pending'), status: 'submitted', contactAction: {kind: 'visit-booking', summary: 'Viewing request', visitStatus: 'pending'}},
+      {...project('nobroker', 'Scheduled fixture', 'https://www.nobroker.in/property/scheduled'), status: 'submitted', contactAction: {kind: 'visit-booking', summary: 'Viewing request', visitStatus: 'scheduled'}},
+      {...project('housing', 'Interest fixture', 'https://housing.com/fixture'), status: 'submitted', contactAction: {kind: 'interest', summary: 'Callback details shared'}},
+    ];
+    assertFits(view);
+    assert.match(text(view), /1 interests · 0 messages · 1 visits/);
+    assert.match(text(view), /1 visit requests awaiting NoBroker confirmation/);
+    assert.doesNotMatch(text(view), /CHROME NEEDS YOU|Complete any OTP/);
+    const history = {...view, screen: 3, history: [view.run!]};
+    assertFits(history);
+    assert.match(text(history), /3 submitted/);
+    assert.doesNotMatch(text(history), /3 confirmed/);
+  }
+});
+
 test('Chrome handoff wraps its reason and keeps the full message accessible in compact and sidebar terminals', () => {
   for (const [width, height] of sizes) {
     const view = fixture(width, height);

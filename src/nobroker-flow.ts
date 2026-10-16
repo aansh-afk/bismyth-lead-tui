@@ -167,12 +167,72 @@ export async function submitNoBrokerVisit(page: Page): Promise<boolean> {
   return true;
 }
 
-/** Only the portal's visible scheduled-visit confirmation is evidence. */
+/** A bounded primary acknowledgement proves the request outcome, not nearby upsells. */
 export async function noBrokerVisitEvidence(page: Page): Promise<string[]> {
-  return page.locator('#scheduleVisitModalConfirmation').evaluateAll(nodes => nodes.flatMap(node => {
-    const rectangle = node.getBoundingClientRect();
-    if (!rectangle.width || !rectangle.height || getComputedStyle(node).visibility === 'hidden') return [];
-    const text = (node as HTMLElement).innerText.replace(/\s+/g, ' ').trim();
-    return /\byour visit is scheduled\b/i.test(text) && text.length < 1500 ? ['nobroker-visit:' + text] : [];
-  }));
+  return page.locator('#scheduleVisitModalConfirmation').evaluateAll(nodes => {
+    const visible = (node: Element): boolean => {
+      const rectangle = node.getBoundingClientRect();
+      if (!rectangle.width || !rectangle.height) return false;
+      for (let current: Element | null = node; current; current = current.parentElement) {
+        const style = getComputedStyle(current);
+        if (current.hasAttribute('hidden') || current.hasAttribute('inert') || current.getAttribute('aria-hidden') === 'true' || style.visibility === 'hidden' || style.display === 'none' || style.opacity === '0') return false;
+      }
+      return true;
+    };
+    const text = (node: Element): string => ((node as HTMLElement).innerText || '').replace(/\s+/g, ' ').trim();
+    const normalizeDate = (value: string): string | undefined => {
+      if (value.length > 120) return;
+      const match = /^(Mon|Tue|Wed|Thu|Fri|Sat|Sun),\s*(\d{1,2})(st|nd|rd|th)\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+at\s+(0?[1-9]|1[0-2]):([0-5]\d)\s*(AM|PM)$/i.exec(value);
+      if (!match) return;
+      const day = Number(match[2]);
+      const ordinal = day % 100 >= 11 && day % 100 <= 13 ? 'th' : ({1: 'st', 2: 'nd', 3: 'rd'} as Record<number, string>)[day % 10] || 'th';
+      const months = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+      const month = months.indexOf(match[4].toLowerCase());
+      if (day < 1 || day > [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month] || match[3].toLowerCase() !== ordinal) return;
+      const capitalize = (value: string): string => value[0].toUpperCase() + value.slice(1).toLowerCase();
+      return `${capitalize(match[1])}, ${day}${ordinal} ${capitalize(match[4])} at ${match[5].padStart(2, '0')}:${match[6]} ${match[7].toUpperCase()}`;
+    };
+    const visibleModals = nodes.filter(visible);
+    if (visibleModals.length !== 1) return [];
+    const modal = visibleModals[0];
+    const primaryPanels = [...modal.querySelectorAll('.nb__2c6WW')].filter(visible);
+    if (primaryPanels.length > 1) return [];
+    const primary = primaryPanels[0];
+    // The adjacent recommendation column can be arbitrarily long and contains
+    // other visits. Bound only the official left acknowledgement panel.
+    if (primary && text(primary).length > 1500) return [];
+    const scope = primary || modal;
+    const headings = [...scope.querySelectorAll('h1,h2,h3,h4,h5,h6,p,[role="heading"],.nb__2hhpY')]
+      .filter(node => visible(node) && /^(?:Your visit is scheduled|Visit Confirmation Pending)$/i.test(text(node)));
+    if (!headings.length && !modal.children.length) {
+      // Older narrow confirmations render this one bounded line without tags.
+      const flat = /^Your visit is scheduled\s+(.+)$/i.exec(text(modal));
+      const date = flat && normalizeDate(flat[1]);
+      return date ? ['nobroker-visit:scheduled:' + date] : [];
+    }
+    if (headings.length !== 1) return [];
+    const heading = headings[0];
+    const pending = /^Visit Confirmation Pending$/i.test(text(heading));
+    const officialDates = [...scope.querySelectorAll('.nb__WypMs')].filter(visible);
+    if (officialDates.length > 1) return [];
+    const dateNode = officialDates[0] || heading.nextElementSibling;
+    if (!dateNode || !scope.contains(dateNode) || !visible(dateNode)) return [];
+    const date = normalizeDate(text(dateNode));
+    if (!date) return [];
+    if (pending) {
+      const knownCopy = /^(?:You will receive call from our executive for further details|Call Now or Request a Callback to Confirm your Visit)\.?$/i;
+      const officialCopy = [...scope.querySelectorAll('.nb__1fLbO')].filter(visible);
+      const nearby: Element[] = [];
+      if (!primary) {
+        let next = dateNode.nextElementSibling;
+        for (let index = 0; next && index < 3; index++, next = next.nextElementSibling) {
+          if (visible(next) && /^(?:P|SPAN|DIV)$/.test(next.tagName) && text(next).length <= 200) nearby.push(next);
+        }
+      }
+      const supporting = (officialCopy.length ? officialCopy : primary ? [...primary.querySelectorAll('p')] : nearby)
+        .filter(node => visible(node) && knownCopy.test(text(node)));
+      if (supporting.length !== 1) return [];
+    }
+    return ['nobroker-visit:' + (pending ? 'pending:' : 'scheduled:') + date];
+  });
 }

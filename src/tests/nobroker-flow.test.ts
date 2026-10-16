@@ -150,3 +150,81 @@ test('NoBroker reads adjacent date spans and ignores the separate Join Visit car
     assert.equal(await page.evaluate(() => (window as unknown as {outsideClicks: number}).outsideClicks), 0);
   } finally {await browser.close();}
 });
+
+function acknowledgement(state: 'pending' | 'scheduled', date = 'Wed, 21st October at 07:00 PM'): string {
+  return `<div id="scheduleVisitModalConfirmation"><div class="nb__2c6WW"><div><p class="nb__2hhpY">${state === 'pending' ? 'Visit Confirmation Pending' : 'Your visit is scheduled'}</p><p class="nb__WypMs">${date}</p></div><p class="nb__1fLbO">${state === 'pending' ? 'You will receive call from our executive for further details' : 'You will get all details regarding this visit on your registered number shortly.'}</p><button onclick="window.actionClicks++">Call</button><button onclick="window.actionClicks++">View all scheduled visits</button></div></div><script>window.actionClicks=0</script>`;
+}
+
+test('NoBroker distinguishes pending acknowledgement, stable rechecks and scheduled transition', {timeout: 30000}, async () => {
+  const browser = await chromium.launch({headless: true, executablePath: await browserPath()});
+  const page = await browser.newPage();
+  try {
+    await page.setContent(acknowledgement('pending'));
+    const pending = await noBrokerVisitEvidence(page);
+    assert.deepEqual(pending, ['nobroker-visit:pending:Wed, 21st October at 07:00 PM']);
+    await page.locator('.nb__2c6WW').evaluate(node => {
+      const details = document.createElement('div');details.textContent = 'Synthetic listing phone +919000000011. Additional help is available.';node.append(details);
+    });
+    assert.deepEqual(await noBrokerVisitEvidence(page), pending, 'revealing a phone or help text does not fabricate a fresh acknowledgement');
+    await page.locator('.nb__1fLbO').evaluate(node => {node.textContent = 'Call Now or Request a Callback to Confirm your Visit';});
+    assert.deepEqual(await noBrokerVisitEvidence(page), pending, 'known callback-confirmation variant remains pending without requesting another callback');
+    await page.locator('.nb__WypMs').evaluate(node => {node.textContent = 'thu, 22nd october at 7:00 pm';});
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:pending:Thu, 22nd October at 07:00 PM']);
+    await page.locator('.nb__2hhpY').evaluate(node => {node.textContent = 'Your visit is scheduled';});
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:scheduled:Thu, 22nd October at 07:00 PM']);
+    assert.equal(await page.evaluate(() => (window as unknown as {actionClicks: number}).actionClicks), 0, 'reading outcomes never calls, joins or requests a callback');
+  } finally {await browser.close();}
+});
+
+test('NoBroker reads the primary acknowledgement despite a long recommendation column', {timeout: 30000}, async () => {
+  const browser = await chromium.launch({headless: true, executablePath: await browserPath()});
+  const page = await browser.newPage();
+  try {
+    await page.setContent(acknowledgement('scheduled', 'Tue, 20th October at 07:00 PM'));
+    await page.locator('#scheduleVisitModalConfirmation').evaluate(node => {
+      const recommendations = document.createElement('div');recommendations.className = 'nb__1ejA1';
+      recommendations.innerHTML = '<h2>Club your visit with nearby properties</h2>' + Array.from({length: 12}, (_, index) => `<section><h3>${index % 2 ? 'Visit Confirmation Pending' : 'Your visit is scheduled'}</h3><p class="nb__WypMs">Fri, 23rd October at 09:00 PM</p><p>${'Synthetic nearby-property description. '.repeat(12)}</p><button onclick="window.actionClicks++">Join Visit</button></section>`).join('');
+      node.append(recommendations);
+    });
+    assert.ok((await page.locator('#scheduleVisitModalConfirmation').innerText()).length > 1500);
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:scheduled:Tue, 20th October at 07:00 PM']);
+    await page.locator('.nb__2hhpY').evaluate(node => {node.textContent = 'Visit Confirmation Pending';});
+    await page.locator('.nb__1fLbO').evaluate(node => {node.textContent = 'You will receive call from our executive for further details';});
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:pending:Tue, 20th October at 07:00 PM']);
+    assert.equal(await page.evaluate(() => (window as unknown as {actionClicks: number}).actionClicks), 0);
+  } finally {await browser.close();}
+});
+
+test('NoBroker rejects incomplete, hidden, duplicate and ambiguous acknowledgements', {timeout: 30000}, async () => {
+  const browser = await chromium.launch({headless: true, executablePath: await browserPath()});
+  const page = await browser.newPage();
+  try {
+    const valid = acknowledgement('pending');
+    const cases = [
+      {label: 'missing concrete date', html: valid.replace('Wed, 21st October at 07:00 PM', '')},
+      {label: 'invalid hour', html: valid.replace('07:00 PM', '25:00 PM')},
+      {label: 'invalid calendar day', html: valid.replace('21st October', '32nd October')},
+      {label: 'impossible month date', html: valid.replace('21st October', '31st September')},
+      {label: 'invalid ordinal', html: valid.replace('21st October', '21th October')},
+      {label: 'missing supporting acknowledgement', html: valid.replace('You will receive call from our executive for further details', '')},
+      {label: 'generic thanks is insufficient', html: valid.replace('Visit Confirmation Pending', 'Thank You !')},
+      {label: 'failure is insufficient', html: valid.replace('Visit Confirmation Pending', 'Failed to schedule visit')},
+      {label: 'whole modal hidden', html: valid.replace('id="scheduleVisitModalConfirmation"', 'id="scheduleVisitModalConfirmation" hidden')},
+      {label: 'heading hidden', html: valid.replace('class="nb__2hhpY"', 'class="nb__2hhpY" hidden')},
+      {label: 'date hidden', html: valid.replace('class="nb__WypMs"', 'class="nb__WypMs" hidden')},
+      {label: 'supporting copy hidden', html: valid.replace('class="nb__1fLbO"', 'class="nb__1fLbO" hidden')},
+      {label: 'duplicate visible modals', html: valid + acknowledgement('scheduled')},
+      {label: 'conflicting primary headings', html: valid.replace('<p class="nb__WypMs">', '<h3>Your visit is scheduled</h3><p class="nb__WypMs">')},
+      {label: 'ambiguous primary dates', html: valid.replace('</div><p class="nb__1fLbO">', '<p class="nb__WypMs">Thu, 22nd October at 08:00 PM</p></div><p class="nb__1fLbO">')},
+      {label: 'unbounded primary panel', html: valid.replace('<button onclick=', '<p>' + 'Unexpected primary content. '.repeat(80) + '</p><button onclick=')},
+    ];
+    for (const sample of cases) {
+      await page.setContent(sample.html);
+      assert.deepEqual(await noBrokerVisitEvidence(page), [], sample.label);
+    }
+    await page.setContent('<div id="scheduleVisitModalConfirmation"><h3>Visit Confirmation Pending</h3><p>Wed, 21st October at 07:00 PM</p><p>You will receive call from our executive for further details</p><section>' + 'Unrelated recommendation text. '.repeat(100) + '</section></div>');
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:pending:Wed, 21st October at 07:00 PM'], 'bounded adjacent fallback ignores later recommendation content');
+    await page.setContent('<div id="scheduleVisitModalConfirmation">Your visit is scheduled Fri, 1st January at 08:00 PM</div>');
+    assert.deepEqual(await noBrokerVisitEvidence(page), ['nobroker-visit:scheduled:Fri, 1st January at 08:00 PM'], 'strict narrow flat confirmation remains supported');
+  } finally {await browser.close();}
+});

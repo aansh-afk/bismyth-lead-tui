@@ -37,10 +37,10 @@ test('a pre-action verification handoff cannot turn stale listing confirmation i
     };
     const originalSubmit = fixturePage.driver.submit.bind(fixturePage.driver);
     fixturePage.driver.submit = async project => { actualSubmit = true; return originalSubmit(project); };
-    const originalConfirmed = fixturePage.driver.confirmed.bind(fixturePage.driver);
-    fixturePage.driver.confirmed = async (project, baseline) => {
+    const originalConfirmation = fixturePage.driver.confirmation.bind(fixturePage.driver);
+    fixturePage.driver.confirmation = async (project, baseline) => {
       if (!actualSubmit) confirmationReadsBeforeSubmit++;
-      return originalConfirmed(project, baseline);
+      return originalConfirmation(project, baseline);
     };
     fixturePage.driver.captureContacts = async () => { captured++; return {status: 'not-found', attemptedAt: new Date().toISOString(), detail: 'No contact fixture.', contacts: []}; };
     const runner = new Runner(run, fixturePage.store, fixturePage.driver);
@@ -56,11 +56,11 @@ test('a pre-action verification handoff cannot turn stale listing confirmation i
 test('new-listing state is cleared before navigation reaches a pre-action verification gate', {timeout: 30000}, async () => {
   const fixturePage = await fixture('<h1>Fixture verification page</h1>');
   try {
-    const state = fixturePage.driver as unknown as {visitReady: boolean; submitScope?: Locator; chatDraft?: string};
-    state.visitReady = true; state.submitScope = fixturePage.page.locator('body'); state.chatDraft = 'Previous listing introduction.';
+    const state = fixturePage.driver as unknown as {visitScheduler: boolean; submitScope?: Locator; chatDraft?: string};
+    state.visitScheduler = true; state.submitScope = fixturePage.page.locator('body'); state.chatDraft = 'Previous listing introduction.';
     let inspected = false;
     fixturePage.driver.verifyCaptcha = async () => {
-      inspected = true; assert.equal(state.visitReady, false); assert.equal(state.submitScope, undefined); assert.equal(state.chatDraft, undefined);
+      inspected = true; assert.equal(state.visitScheduler, false); assert.equal(state.submitScope, undefined); assert.equal(state.chatDraft, undefined);
       return {pending: true, reason: 'Fixture verification remains pending.'};
     };
     const prepared = await fixturePage.driver.prepare(project('housing', 'Next property', url), fixturePage.runConfig);

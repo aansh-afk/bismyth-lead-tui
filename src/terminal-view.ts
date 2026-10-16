@@ -204,12 +204,14 @@ export function renderView(view: View): string {
       const size = Math.min(32, area - 15); const filled = run.projects.length ? Math.round(size * done / run.projects.length) : 0;
       add(`${'━'.repeat(filled)}${'─'.repeat(size - filled)}  ${done}/${run.projects.length} checked`, ansi.cyan);
       const bookings = run.projects.filter(item => item.status === 'submitted' && item.contactAction?.kind === 'visit-booking').length;
+      const pending = run.projects.filter(item => item.status === 'submitted' && item.contactAction?.kind === 'visit-booking' && item.contactAction.visitStatus === 'pending').length;
       const messages = run.projects.filter(item => item.status === 'submitted' && item.contactAction?.kind === 'portal-message').length;
-      add(`${count.submitted - bookings - messages} interests · ${messages} messages · ${bookings} visits · ${count.prepared} tested`, ansi.green);
+      add(`${count.submitted - bookings - messages} interests · ${messages} messages · ${bookings - pending} visits · ${count.prepared} tested`, ansi.green);
+      if (pending) add(`${pending} visit requests awaiting NoBroker confirmation`, ansi.amber);
       add(`${count.uncertain} need review   ${count.skipped} skipped   ${count.queued} waiting`, ansi.faint);
       add(''); add('ACTIVITY', ansi.faint);
       const logs = run.events;
-      const available = Math.max(1, maxBody - (run.state === 'complete' ? 10 : 8));
+      const available = Math.max(1, maxBody - (run.state === 'complete' ? 10 : 8) - (pending ? 1 : 0));
       const end = view.active ? logs.length : Math.min(logs.length, Math.max(available, view.selected[2] + 1));
       for (const event of logs.slice(Math.max(0, end - available), end)) add(event.at.slice(11, 19) + '  ' + event.message);
       if (run.state === 'complete') { add(''); add(run.config.mode === 'preview' ? 'Next: 2 Review queue → Enter → Send enquiries, or X to export.' : 'Next: X exports these results. 4 opens saved runs.', ansi.cyan); }
@@ -241,7 +243,7 @@ export function renderView(view: View): string {
     if (!view.history.length) { add('Your first run will appear here.', ansi.bright); add('Go to Set up to get started.', ansi.faint); }
     const available = Math.max(1, maxBody - 3);
     const start = Math.max(0, view.selected[3] - Math.floor(available / 2));
-    for (const [offset, item] of view.history.slice(start, start + available).entries()) add(`${item.createdAt.slice(5, 16).replace('T', ' ')}  ${cell(item.config.city, 12)} ${cell(item.state, 9)} ${counts(item).submitted} confirmed`, start + offset === view.selected[3] ? ansi.selected : ansi.text);
+    for (const [offset, item] of view.history.slice(start, start + available).entries()) add(`${item.createdAt.slice(5, 16).replace('T', ' ')}  ${cell(item.config.city, 12)} ${cell(item.state, 9)} ${counts(item).submitted} submitted`, start + offset === view.selected[3] ? ansi.selected : ansi.text);
   }
   for (let index = 0; index < maxBody; index++) {
     let left = '';

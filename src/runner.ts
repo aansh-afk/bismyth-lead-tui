@@ -1,6 +1,6 @@
 import {EventEmitter} from 'node:events';
 import {setTimeout as sleep} from 'node:timers/promises';
-import type {Driver, Handoff} from './browser.js';
+import type {Driver, Handoff, SubmissionConfirmation} from './browser.js';
 import {duplicateKey} from './model.js';
 import type {Project, ProjectStatus, Run} from './model.js';
 import {Store} from './store.js';
@@ -174,6 +174,18 @@ export class Runner extends EventEmitter {
     item.status = status; item.detail = detail; item.updatedAt = new Date().toISOString();
     await this.record(item.site + ' / ' + status + ': ' + item.title);
   }
+  private async confirmation(item: Project, baseline: string[]): Promise<SubmissionConfirmation | undefined> {
+    if (this.driver.confirmation) return this.driver.confirmation(item, baseline);
+    return await this.driver.confirmed(item, baseline) ? {detail: 'New portal confirmation observed.'} : undefined;
+  }
+  private async markSubmitted(item: Project, confirmation: SubmissionConfirmation): Promise<void> {
+    if (item.site === 'nobroker' && confirmation.visitStatus) item.contactAction = {
+      kind: 'visit-booking', visitStatus: confirmation.visitStatus,
+      summary: item.contactAction?.kind === 'visit-booking' ? item.contactAction.summary : 'Viewing request using your signed-in NoBroker account.',
+    };
+    await this.mark(item, 'submitted', confirmation.detail);
+    if (item.contactAction?.visitStatus === 'pending') await this.record('NoBroker: visit request received; awaiting confirmation. Continuing without another booking attempt.');
+  }
   private async captureRevealedContacts(item: Project): Promise<void> {
     if (!this.driver.captureContacts) return;
     await this.checkpoint();
@@ -184,7 +196,7 @@ export class Runner extends EventEmitter {
       if (item.contactCapture.contacts.length) item.contactCapture.status = 'captured';
       await this.record(item.site + ': ' + capture.detail);
     } catch {
-      item.contactCapture = {status: retained.length ? 'captured' : 'failed', attemptedAt: new Date().toISOString(), detail: 'Portal contact collection did not finish. The confirmed interest or booking was retained.', contacts: retained};
+      item.contactCapture = {status: retained.length ? 'captured' : 'failed', attemptedAt: new Date().toISOString(), detail: 'Portal contact collection did not finish. The acknowledged submission was retained.', contacts: retained};
       await this.store.save(this.run);
       if (this.stopped || this.controller.signal.aborted) throw new RunStopped();
       await this.record(item.site + ': contact collection failed; confirmed submission retained.');
@@ -215,7 +227,10 @@ export class Runner extends EventEmitter {
           while (!preparation.ready && !preparation.alreadyShared) {
             const answer = await this.handoff(preparation.reason + ' Complete the form in Chrome; c rechecks, k skips.', preparation.verification);
             if (answer === 'skip') { await this.mark(item, 'skipped', preparation.reason); break; }
-            if (this.run.config.mode === 'submit' && preparation.allowHandoffConfirmation !== false && await this.driver.confirmed(item, baseline)) { await this.mark(item, 'submitted', 'New portal confirmation observed after browser handoff.'); break; }
+            if (this.run.config.mode === 'submit' && preparation.allowHandoffConfirmation !== false) {
+              const confirmation = await this.confirmation(item, baseline);
+              if (confirmation) { await this.markSubmitted(item, confirmation); break; }
+            }
             preparation = await this.driver.prepare(item, this.run.config, false);
             baseline = preparation.baseline;
           }
@@ -223,7 +238,10 @@ export class Runner extends EventEmitter {
             await this.mark(item, 'skipped', 'The same Atlas introduction is already visible in this conversation; no duplicate was sent.');
           }
           if ((item.status as ProjectStatus) !== 'working') {
-            if ((item.status as ProjectStatus) === 'submitted') await this.captureRevealedContacts(item);
+            if ((item.status as ProjectStatus) === 'submitted') {
+              previous.add(duplicateKey(this.run.config, item));
+              await this.captureRevealedContacts(item);
+            }
             continue;
           }
           item.contactAction = {kind: preparation.actionKind || 'interest', summary: preparation.summary || 'Share the configured callback details through the property portal.'};
@@ -245,19 +263,20 @@ export class Runner extends EventEmitter {
             if (!clicked) {
               await this.handoff('Submit control not found. Submit in Chrome, then c checks confirmation; k leaves this uncertain.');
             }
-            let confirmed = await this.driver.confirmed(item, baseline);
+            let confirmed = await this.confirmation(item, baseline);
             const deadline = Date.now() + 2500;
             while (!confirmed && Date.now() < deadline) {
               await sleep(100, undefined, {signal: this.controller.signal});
-              confirmed = await this.driver.confirmed(item, baseline);
+              confirmed = await this.confirmation(item, baseline);
             }
             if (!confirmed && clicked) {
               const verification = await this.driver.verifyCaptcha?.();
-              confirmed = await this.driver.confirmed(item, baseline);
+              confirmed = await this.confirmation(item, baseline);
               if (!confirmed) await this.handoff((verification?.pending ? verification.reason + ' ' : '') + 'Complete any OTP or remaining steps in Chrome. c checks confirmation; k leaves this uncertain.');
-              confirmed = await this.driver.confirmed(item, baseline);
+              confirmed = await this.confirmation(item, baseline);
             }
-            await this.mark(item, confirmed ? 'submitted' : 'uncertain', confirmed ? 'New portal confirmation observed.' : 'No new confirmation observed; inspect before retrying.');
+            if (confirmed) await this.markSubmitted(item, confirmed);
+            else await this.mark(item, 'uncertain', 'No new confirmation observed; inspect before retrying.');
             if (confirmed) {
               previous.add(duplicateKey(this.run.config, item));
               await this.captureRevealedContacts(item);
@@ -272,9 +291,10 @@ export class Runner extends EventEmitter {
       this.run.state = 'complete';
       const confirmed = this.run.projects.filter(item => item.status === 'submitted');
       const bookings = confirmed.filter(item => item.contactAction?.kind === 'visit-booking').length;
+      const pending = confirmed.filter(item => item.contactAction?.kind === 'visit-booking' && item.contactAction.visitStatus === 'pending').length;
       const messages = confirmed.filter(item => item.contactAction?.kind === 'portal-message').length;
       const numbers = deduplicateContacts(this.run.projects.flatMap(item => item.contactCapture?.contacts || [])).length;
-      await this.record(`Run finished. ${confirmed.length - bookings - messages} confirmed interests; ${messages} portal messages; ${bookings} viewing bookings; ${numbers} contacts collected. WhatsApp follow-up is separate; 5 opens Contacts.`);
+      await this.record(`Run finished. ${confirmed.length - bookings - messages} confirmed interests; ${messages} portal messages; ${bookings - pending} viewing bookings${pending ? `; ${pending} visit requests awaiting confirmation` : ''}; ${numbers} contacts collected. WhatsApp follow-up is separate; 5 opens Contacts.`);
     });
   }
   private async execute(task: () => Promise<void>): Promise<void> {

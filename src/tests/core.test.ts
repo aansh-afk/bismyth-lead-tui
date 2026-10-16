@@ -122,6 +122,29 @@ test('confirmed success is saved and not resubmitted on resume', async () => {
     assert.equal(calls, 1); assert.equal(counts(run).submitted, 1);
   } finally { await close(); }
 });
+test('a pending visit acknowledged after a generic form handoff keeps its visit classification', async () => {
+  const {store, close} = await temporary();
+  try {
+    const run = createRun({...config, mode: 'submit'});
+    run.projects = [project('nobroker', 'Fixture handoff', 'https://www.nobroker.in/property/fixture-handoff')];
+    run.projects.push({...run.projects[0], id: 'legacy-row', url: 'https://nobroker.in/property/fixture-handoff'});
+    let preparations = 0; let reads = 0; let handoffs = 0; let submits = 0; let captures = 0;
+    const runner = new Runner(run, store, fake({
+      prepare: async () => ({ready: false, reason: 'Complete the fixture step.', baseline: [], actionKind: ++preparations === 1 ? 'interest' : 'visit-booking'}),
+      submit: async () => { submits++; return true; },
+      confirmed: async () => { throw new Error('Do not read the legacy boolean and metadata separately.'); },
+      confirmation: async () => ++reads === 1 ? undefined : {visitStatus: 'pending', detail: 'Viewing request received; awaiting NoBroker confirmation.'},
+      captureContacts: async item => { captures++; assert.equal(item.contactAction?.visitStatus, 'pending'); return {status: 'not-found', attemptedAt: new Date().toISOString(), detail: 'Fixture contact check.', contacts: []}; },
+    }));
+    runner.on('handoff', () => { handoffs++; runner.continue('continue'); });
+    await runner.process();
+    assert.equal(handoffs, 2); assert.equal(preparations, 2); assert.equal(reads, 2); assert.equal(submits, 0); assert.equal(captures, 1);
+    assert.equal(run.projects[0].status, 'submitted'); assert.equal(run.projects[0].contactAction?.kind, 'visit-booking');
+    assert.equal(run.projects[1].status, 'skipped', 'a same-run hostname alias cannot repeat the acknowledged request');
+    assert.equal((await store.load(run.id)).projects[0].contactAction?.visitStatus, 'pending');
+    assert.match(run.events.at(-1)!.message, /0 confirmed interests; 0 portal messages; 0 viewing bookings; 1 visit requests awaiting confirmation/);
+  } finally { await close(); }
+});
 test('manual verification can be skipped and stop resolves a pending handoff', async () => {
   const {store, close} = await temporary();
   try {

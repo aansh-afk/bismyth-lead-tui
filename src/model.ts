@@ -17,7 +17,7 @@ export interface Project {
   id: string; site: Site; title: string; url: string; status: ProjectStatus;
   detail: string; updatedAt: string;
   contactCapture?: ContactCapture;
-  contactAction?: {kind: 'interest' | 'visit-booking' | 'portal-message'; summary: string};
+  contactAction?: {kind: 'interest' | 'visit-booking' | 'portal-message'; summary: string; visitStatus?: 'pending' | 'scheduled'};
 }
 export interface Run {
   version: 1; id: string; createdAt: string; updatedAt: string;

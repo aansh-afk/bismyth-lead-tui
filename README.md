@@ -6,10 +6,10 @@ Interactive terminal app for the Atlas sales funnel: share your selected callbac
 
 Requirements: Node **20.19+**, Chrome/Chromium, and Codex CLI signed in with ChatGPT.
 
-Install **v0.1.20** from the GitHub release:
+Install **v0.1.21** from the GitHub release:
 
 ```bash
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.20/bismyth-lead-tui-0.1.20.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.1.21/bismyth-lead-tui-0.1.21.tgz
 bismyth-leads --version
 bismyth-leads
 ```
@@ -17,7 +17,7 @@ bismyth-leads
 Or use the Linux/macOS installer, which installs under `~/.local` without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.20/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/aansh-afk/bismyth-lead-tui/v0.1.21/install.sh | sh
 ```
 
 If `~/.local/bin` is not on your PATH, the installer prints the full command to run. `BISMYTH_INSTALL_PREFIX` changes the installation prefix. `BISMYTH_TUI_VERSION` selects a release version.
@@ -71,7 +71,7 @@ npm start
 
 `npm start` can select a compatible Node version already installed under `~/.nvm/versions/node` if your shell's Node is older. It does not install Node or change your shell.
 
-To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.20.tgz`. A local build does not publish a GitHub or npm release.
+To package this checkout for another machine, run `npm pack` and install the resulting `.tgz` with `npm install -g ./bismyth-lead-tui-0.1.21.tgz`. A local build does not publish a GitHub or npm release.
 
 ## Atlas lead-intake behavior
 
@@ -79,7 +79,7 @@ The original meeting assigns this CLI to distributing your callback number acros
 
 On Set up, enter `all` in Websites to include all seven portals; only selected portals with confirmed login observations are used. Existing preferences are retained unless you change them. Exact Contact controls are preferred over AI selection, and final submissions are scoped to the prepared form. A phone reveal or stale success message is not proof your details were sent.
 
-NoBroker may send Contact into its viewing scheduler. Test forms selects the latest available date/time without clicking Confirm Booking. Send enquiries can create a real appointment once, then reads the matching contact-history card. **This uses NoBroker's registered account number; it does not prove the callback number entered in the TUI was shared. Use an account registered with the intended callback number.** Existing visits/rescheduling and uncertain booking outcomes are not automatically retried.
+NoBroker may send Contact into its viewing scheduler. Test forms selects the latest available date/time without clicking Confirm Booking. Send enquiries can create a real appointment once, then reads the matching contact-history card. **This uses NoBroker's registered account number; it does not prove the callback number entered in the TUI was shared. Use an account registered with the intended callback number.** Existing visits/rescheduling and uncertain booking outcomes are not automatically retried. A fresh **Visit Confirmation Pending** response records a submitted visit request awaiting NoBroker confirmation, collects any revealed contact details and advances without an OTP prompt or another booking click. Pending requests are counted separately from scheduled visits. Nearby-property recommendations and their Join Visit buttons are ignored. JSON retains the visit state; CSV appends actionKind and visitStatus after the existing six fields.
 
 OLX seller messages contain an honest Atlas business introduction and the chosen callback phone/email. Test forms drafts only; Send enquiries clicks Send once and requires fresh outgoing-message evidence without a pending/failed status. This is portal UI confirmation, not proof a seller read or received the message. Contacts still need review and the existing Baileys send confirmation. This package does not deploy the external WhatsApp conversational agent or CRM.
 

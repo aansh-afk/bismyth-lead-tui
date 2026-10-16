@@ -102,7 +102,7 @@ export class Store {
     if (format === 'json') await this.write(name, run);
     else {
       const cell = (value: string): string => '"' + (/^[=+@\-\t\r]/.test(value) ? "'" + value : value).replaceAll('"', '""') + '"';
-      const lines = ['site,title,url,status,detail,updatedAt', ...run.projects.map(item => [item.site, item.title, item.url, item.status, item.detail, item.updatedAt].map(cell).join(','))];
+      const lines = ['site,title,url,status,detail,updatedAt,actionKind,visitStatus', ...run.projects.map(item => [item.site, item.title, item.url, item.status, item.detail, item.updatedAt, item.contactAction?.kind || '', item.contactAction?.visitStatus || ''].map(cell).join(','))];
       await this.init();
       const handle = await open(join(this.directory, name), 'w', 0o600);
       try { await handle.writeFile(lines.join('\r\n') + '\r\n'); } finally { await handle.close(); }

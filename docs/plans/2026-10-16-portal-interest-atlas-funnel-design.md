@@ -22,3 +22,7 @@ Use official public pages/assets and the user's screenshots to derive selectors,
 ## NoBroker date-label compatibility correction
 
 The October 16 screenshot and current official ScheduleVisitNew asset show adjacent day/weekday spans with no separating text node (`16Today`, `21Wed`). Retain Playwright and the existing scoped scheduler; allow zero or more whitespace characters only between the strict numeric day and known weekday/Today suffix. Keep month/date validation, disabled-control filtering, latest-date/time selection, explicit final booking and duplicate protection unchanged. Match production markup in both helper and Runner/PortalBrowser fixtures, including the independent Join Visit card. This is a correction to the already authorized scheduling flow.
+
+## NoBroker acknowledgement correction
+
+Recognize both scheduled and confirmation-pending responses from the portal's primary confirmation panel. Pending proves that the portal acknowledged a visit request; it does not prove an appointment is confirmed. Retain submitted status for duplicate protection, add an optional pending/scheduled visit state, and persist it before contact capture. Continue to the next listing without another final action. Use stable primary date/time evidence so phone/help changes and neighboring recommendation cards cannot create new confirmation. Keep unrecognized responses uncertain and existing manual verification behavior.

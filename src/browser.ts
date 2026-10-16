@@ -76,11 +76,13 @@ export function publicListingContext(options: {site: Site; intent: Config['inten
 
 export type Handoff = (message: string, verification?: boolean) => Promise<'continue' | 'skip'>;
 export interface Prepared {ready: boolean; reason: string; baseline: string[]; verification?: boolean; actionKind?: 'interest' | 'visit-booking' | 'portal-message'; summary?: string; alreadyShared?: boolean; allowHandoffConfirmation?: boolean}
+export interface SubmissionConfirmation {detail: string; visitStatus?: 'pending' | 'scheduled'}
 export interface Driver {
   discover(config: Config, site: Site, limit: number, checkpoint: () => Promise<void>, handoff: Handoff): Promise<Project[]>;
   prepare(item: Project, config: Config, navigate?: boolean): Promise<Prepared>;
   submit(item: Project): Promise<boolean>;
   confirmed(item: Project, baseline: string[]): Promise<boolean>;
+  confirmation?(item: Project, baseline: string[]): Promise<SubmissionConfirmation | undefined>;
   captureContacts?(item: Project, config: Config): Promise<ContactCapture>;
   verifyCaptcha?(): Promise<CaptchaResult>;
   verificationReady?(): Promise<boolean>;
@@ -102,7 +104,7 @@ export class PortalBrowser implements Driver {
   private decisionController = new AbortController();
   private captchaFailure?: {url: string; result: CaptchaResult; attempts: number};
   private discoveryNotes: string[] = [];
-  private visitReady = false;
+  private visitScheduler = false;
   private submitScope?: Locator;
   private chatDraft?: string;
   private activity: CaptchaActivity = async () => undefined;
@@ -333,6 +335,7 @@ export class PortalBrowser implements Driver {
   private async evidence(item: Project): Promise<string[]> {
     const definition = this.definitions[item.site];
     if (this.chatDraft) return portalChatEvidence(this.page!, this.chatDraft);
+    if (item.site === 'nobroker' && this.visitScheduler) return noBrokerVisitEvidence(this.page!);
     const standard = await this.page!.evaluate(([pattern, selector]) => {
       const result: string[] = [];
       const visible = (node: Element): boolean => { const b = node.getBoundingClientRect(); const style = getComputedStyle(node); return b.width > 0 && b.height > 0 && style.visibility !== 'hidden' && style.opacity !== '0' && !node.closest('[hidden],[aria-hidden="true"],[inert]'); };
@@ -355,14 +358,14 @@ export class PortalBrowser implements Driver {
   async prepare(item: Project, config: Config, navigate = true): Promise<Prepared> {
     const page = await this.start(config);
     const definition = this.definitions[item.site];
-    if (navigate) { this.visitReady = false; this.submitScope = undefined; this.chatDraft = undefined; await this.navigate(item.url); }
+    if (navigate) { this.visitScheduler = false; this.submitScope = undefined; this.chatDraft = undefined; await this.navigate(item.url); }
     const gate = await this.verifyCaptcha();
     if (gate.pending) return {ready: false, reason: gate.reason, baseline: [], verification: true, allowHandoffConfirmation: false};
     const baseline = await this.evidence(item);
     if (item.site === 'nobroker') {
       const visit = await prepareNoBrokerVisit(page, this.checkpoint);
       if (visit.detected) {
-        this.visitReady = visit.ready;
+        this.visitScheduler = true;
         return {ready: visit.ready, reason: visit.reason, baseline, actionKind: 'visit-booking', summary: visit.summary};
       }
     }
@@ -386,7 +389,7 @@ export class PortalBrowser implements Driver {
       await page.locator('.calender-compoent button, ' + definition.fields.phone.join(',')).filter({visible: true}).first().waitFor({state: 'visible', timeout: 8000}).catch(() => undefined);
       const visit = await prepareNoBrokerVisit(page, this.checkpoint);
       if (visit.detected) {
-        this.visitReady = visit.ready;
+        this.visitScheduler = true;
         return {ready: visit.ready, reason: visit.reason, baseline, actionKind: 'visit-booking', summary: visit.summary};
       }
     }
@@ -439,7 +442,7 @@ export class PortalBrowser implements Driver {
   }
   async submit(item: Project): Promise<boolean> {
     if (this.chatDraft) return submitPortalChat(this.page!, this.chatDraft);
-    if (item.site === 'nobroker' && this.visitReady) return submitNoBrokerVisit(this.page!);
+    if (item.site === 'nobroker' && this.visitScheduler) return submitNoBrokerVisit(this.page!);
     const definition = this.definitions[item.site];
     if (this.submitScope) return this.clickLabels(definition.submitLabels, definition.submitSelector, this.submitScope);
     const handle = await this.page!.evaluateHandle(({labels, selector}) => {
@@ -452,8 +455,17 @@ export class PortalBrowser implements Driver {
     try { await control.click(); await this.settle(); return true; } finally { await handle.dispose(); }
   }
   async confirmed(item: Project, baseline: string[]): Promise<boolean> {
+    return !!await this.confirmation(item, baseline);
+  }
+  async confirmation(item: Project, baseline: string[]): Promise<SubmissionConfirmation | undefined> {
     const evidence = await this.evidence(item);
-    return evidence.some(text => !baseline.includes(text));
+    const fresh = evidence.filter(text => !baseline.includes(text));
+    if (!fresh.length) return;
+    if (item.site === 'nobroker') {
+      if (fresh.some(text => text.startsWith('nobroker-visit:pending:'))) return {visitStatus: 'pending', detail: 'NoBroker received the visit request; awaiting NoBroker confirmation. See the portal for callback details.'};
+      if (fresh.some(text => text.startsWith('nobroker-visit:scheduled:'))) return {visitStatus: 'scheduled', detail: 'NoBroker confirmed the viewing appointment.'};
+    }
+    return {detail: 'New portal confirmation observed.'};
   }
   async captureContacts(item: Project, config: Config): Promise<ContactCapture> {
     const page = await this.start(config);

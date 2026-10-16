@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createServer} from 'node:http';
 import {once} from 'node:events';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {PortalBrowser, browserPath} from '../browser.js';
 import {portalCatalog} from '../portal-catalog.js';
-import {createRun, defaults, project} from '../model.js';
+import {copyProject, createRun, defaults, project} from '../model.js';
 import type {Config, Project, Site} from '../model.js';
 import {Runner} from '../runner.js';
 import {Store} from '../store.js';
@@ -54,14 +54,14 @@ class ObservedBrowser extends PortalBrowser {
     return super.captureContacts(item, config);
   }
 }
-async function setup(site: Site, html = enquiryFixture(site)) {
+async function setup(site: Site, html: string | ((path: string) => string) = enquiryFixture(site)) {
   const directory = await mkdtemp(join(tmpdir(), 'bismyth-portal-enquiry-'));
   const requests: {path: string; body: string}[] = [];
   const server = createServer((request, response) => {
     if (request.method === 'POST') {
       let body = '';request.on('data', part => {body += String(part);});request.on('end', () => {requests.push({path: request.url!, body});response.end('ok');});return;
     }
-    response.setHeader('Content-Type', 'text/html');response.end(html);
+    response.setHeader('Content-Type', 'text/html');response.end(typeof html === 'string' ? html : html(request.url || '/'));
   });
   server.listen(0, '127.0.0.1');await once(server, 'listening');
   const address = server.address();assert.ok(address && typeof address === 'object');
@@ -144,7 +144,7 @@ const scheduler = `<!doctype html><title>NoBroker fixture scheduler</title><styl
 <div id="visit" hidden><div class="schedule-visit-header-container">Schedule your FREE visit</div><div class="schedule-modal-content-container"><div class="calender-compoent"><div><h2>Pick a Date</h2><div><div><div><div>DEC</div></div></div><button id="day30"><span>30</span><span>Wed</span></button><button id="day31"><span>31</span><span>Thu</span></button></div></div><div id="times"></div><button id="confirm" hidden>Confirm Booking</button></div></div></div><div id="scheduleVisitModalConfirmation" hidden></div>
 <script>window.wrongClicks=0;window.dates=[];window.times=[];
 document.querySelectorAll('#day30,#day31').forEach(button=>button.onclick=()=>{window.dates.push(button.id);document.querySelectorAll('#day30,#day31').forEach(day=>day.setAttribute('aria-pressed',String(day===button)));document.querySelector('#times').innerHTML='';setTimeout(()=>{document.querySelector('#times').innerHTML='<div class="visit_schedule_container"><button aria-pressed="true">Evening (2)</button><div class="slot">7:00 PM</div><div class="slot">8:00 PM</div></div>';document.querySelectorAll('.slot').forEach(slot=>slot.onclick=()=>{window.times.push(slot.textContent);document.querySelectorAll('.slot').forEach(item=>item.setAttribute('aria-selected',String(item===slot)));});document.querySelector('#confirm').hidden=false;},50);});
-document.querySelector('#confirm').onclick=()=>fetch('/book',{method:'POST'}).then(()=>{const confirmation=document.querySelector('#scheduleVisitModalConfirmation');confirmation.hidden=false;confirmation.textContent='Your visit is scheduled Thu, 31st December at 08:00 PM';});</script>`;
+document.querySelector('#confirm').onclick=()=>fetch('/book',{method:'POST'}).then(()=>{const confirmation=document.querySelector('#scheduleVisitModalConfirmation');confirmation.hidden=false;confirmation.innerHTML='<h3>Your visit is scheduled</h3><p>Thu, 31st December at 08:00 PM</p>';});</script>`;
 
 test('NoBroker scheduler integrates with Preview and Submit as a distinct viewing booking', {timeout: 45000}, async () => {
   for (const mode of ['preview', 'submit'] as const) {
@@ -168,10 +168,76 @@ test('NoBroker scheduler integrates with Preview and Submit as a distinct viewin
       assert.equal(browser.captures, mode === 'preview' ? 0 : 1);
       if (mode === 'submit') {
         assert.equal(fixture.requests[0].path, '/book');
+        assert.equal(run.projects[0].contactAction?.visitStatus, 'scheduled');
         assert.deepEqual(run.projects[0].contactCapture?.contacts.map(contact => contact.value), [sellerPhone]);
         assert.match(run.events.at(-1)!.message, /0 confirmed interests; 0 portal messages; 1 viewing bookings; 1 contacts collected/);
       } else assert.equal(run.projects[0].contactCapture, undefined);
       assert.equal(browser.aiCalls, 0);assert.deepEqual(browser.outsideRequests, []);
     } finally {await browser.close();await fixture.close();}
   }
+});
+
+const pendingAcknowledgement = '<h3>Visit Confirmation Pending</h3><p>Thu, 31st December at 08:00 PM</p><p>You will receive call from our executive for further details</p>';
+const pendingScheduler = scheduler.replace("confirmation.innerHTML='<h3>Your visit is scheduled</h3><p>Thu, 31st December at 08:00 PM</p>';",
+  `confirmation.innerHTML='${pendingAcknowledgement}';document.querySelector('#pending-seller').hidden=false;`)
+  + `<section id="pending-seller" data-contact-details hidden>Listing owner contact: <a href="tel:${sellerPhone}">${sellerPhone}</a></section>`;
+
+test('a pending NoBroker visit request captures contacts, advances to the next listing and remains deduplicated without claiming a scheduled visit', {timeout: 45000}, async () => {
+  const fixture = await setup('nobroker', path => path === '/listing/nobroker' ? pendingScheduler : enquiryFixture('housing'));
+  try {
+    const run = createRun({...fixture.config, sites: ['nobroker', 'housing'], mode: 'submit'});
+    run.projects = [fixture.item, project('housing', 'Next callback listing', new URL('/listing/housing', fixture.item.url).href)];
+    let handoffs = 0; const runner = new Runner(run, fixture.store, fixture.browser);
+    runner.on('handoff', () => { handoffs++; runner.continue('skip'); });
+    await runner.process();
+    assert.equal(run.state, 'complete'); assert.equal(handoffs, 0, 'a received pending request does not prompt for an OTP or another booking');
+    assert.deepEqual(run.projects.map(item => item.status), ['submitted', 'submitted']);
+    assert.equal(run.projects[0].contactAction?.kind, 'visit-booking');
+    assert.equal(run.projects[0].contactAction?.visitStatus, 'pending'); assert.match(run.projects[0].detail, /awaiting.{0,20}confirmation/i);
+    assert.equal(run.projects[1].contactAction?.kind, 'interest'); assert.equal(run.projects[1].contactAction?.visitStatus, undefined);
+    assert.deepEqual(fixture.requests.map(request => request.path), ['/book', '/submit/housing']);
+    assert.deepEqual(JSON.parse(fixture.requests[1].body), {name: fixture.config.name, phone: '9000000000', email: fixture.config.email});
+    assert.equal(fixture.browser.captures, 2); assert.equal(fixture.browser.aiCalls, 0);
+    for (const item of run.projects) {
+      assert.equal(item.contactCapture?.collectionMethod, 'playwright');
+      assert.deepEqual(item.contactCapture?.contacts.map(contact => contact.value), [sellerPhone]);
+    }
+    assert.match(run.events.at(-1)!.message, /1 confirmed interests; 0 portal messages; 0 viewing bookings; 1 visit requests awaiting confirmation; 1 contacts collected/);
+    const saved = await fixture.store.load(run.id);
+    assert.equal(saved.projects[0].contactAction?.visitStatus, 'pending'); assert.equal(saved.projects[0].status, 'submitted');
+    const csv = await readFile(await fixture.store.export(saved, 'csv'), 'utf8');
+    assert.equal(csv.split('\r\n')[0], 'site,title,url,status,detail,updatedAt,actionKind,visitStatus');
+    assert.ok(csv.includes('"visit-booking","pending"'));
+    const json = JSON.parse(await readFile(await fixture.store.export(saved, 'json'), 'utf8')) as typeof run;
+    assert.equal(json.projects[0].contactAction?.visitStatus, 'pending');
+    await new Runner(saved, fixture.store, fixture.browser).process();
+    assert.equal(fixture.requests.length, 2); assert.equal(fixture.browser.captures, 2, 'resuming does not rebook or reread completed listings');
+    const repeated = createRun({...fixture.config, sites: ['nobroker', 'housing'], mode: 'submit'});
+    repeated.projects = saved.projects.map(copyProject);
+    await new Runner(repeated, fixture.store, fixture.browser).process();
+    assert.deepEqual(repeated.projects.map(item => item.status), ['skipped', 'skipped']);
+    assert.equal(fixture.requests.length, 2); assert.equal(fixture.browser.captures, 2, 'a new run also respects the received pending request');
+    assert.deepEqual(fixture.browser.outsideRequests, []);
+  } finally { await fixture.close(); }
+});
+
+test('an existing pending NoBroker acknowledgement cannot become fresh success when a phone is revealed or upsell dates change', {timeout: 30000}, async () => {
+  const existingPending = scheduler.replace('<div id="visit" hidden>', '<div id="visit">')
+    .replace('<div id="scheduleVisitModalConfirmation" hidden></div>', `<div id="scheduleVisitModalConfirmation">${pendingAcknowledgement}<div id="extra-contact"></div><section id="upsell">Book another service on 1st January at 06:00 PM</section></div>`);
+  const fixture = await setup('nobroker', existingPending);
+  try {
+    await fixture.browser.start(fixture.config); await fixture.browser.navigate(fixture.item.url);
+    const preparation = await fixture.browser.prepare(fixture.item, fixture.config, false);
+    assert.equal(preparation.ready, false); assert.equal(preparation.actionKind, 'visit-booking');
+    assert.ok(preparation.baseline.some(key => key.startsWith('nobroker-visit:pending:')));
+    assert.equal(await fixture.browser.confirmed(fixture.item, preparation.baseline), false);
+    await fixture.browser.page!.evaluate(phone => {
+      document.querySelector('#extra-contact')!.textContent = 'Listing owner phone: ' + phone;
+      document.querySelector('#upsell')!.textContent = 'Book another service on 2nd January at 09:00 AM. ' + 'Additional service details. '.repeat(100);
+    }, sellerPhone);
+    assert.equal(await fixture.browser.confirmed(fixture.item, preparation.baseline), false);
+    assert.equal(await fixture.browser.confirmation(fixture.item, preparation.baseline), undefined);
+    assert.equal(fixture.requests.length, 0); assert.equal(fixture.browser.captures, 0); assert.equal(fixture.browser.aiCalls, 0);
+    assert.deepEqual(fixture.browser.outsideRequests, []);
+  } finally { await fixture.close(); }
 });
