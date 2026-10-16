@@ -36,3 +36,9 @@ Local headless Chromium fixtures reproduce authenticated and unauthenticated acc
 Source review caught the authenticated Housing Edit button being a sibling rather than a descendant; both production detection and fixtures were corrected and the complete focused account suite passed afterward. No tested failures remain in that scope. Opening Housing's Change Password/OTP account overlays can conservatively show signed out due to the existing credential-field rule; normal edit-profile fields are covered.
 
 The user's live authenticated Chrome tabs were not inspected through the collaborative browser. Actual post-login confirmation therefore still requires reopening the updated TUI, selecting Housing or Quikr and pressing C on the account/profile page. The tests do not establish successful property enquiries, WhatsApp delivery or new portal adapters. No live enquiries, WhatsApp sends or Firecrawl requests were made for this patch.
+
+## Publication and installed checks
+
+Source pushed at `dff356f`; public release: https://github.com/aansh-afk/bismyth-lead-tui/releases/tag/v0.1.16 . The package and checksum are attached, and both README and the default installer target v0.1.16. Anonymous package download succeeded and matched the recorded SHA-256. The public pinned installer updated the laptop; `bismyth-leads --version` returned `0.1.16`. Installed account/browser/UI modules match the verified build. All 17 saved profile/account/run files remained byte-for-byte unchanged.
+
+An installed CLI PTY smoke check used isolated fixture data: N continued to the profile; F without a confirmed login returned to website accounts with an explicit error. No run was created, Chrome was not launched and the app exited zero. The TUI must be restarted to load the update before rechecking the user's existing website sessions.
