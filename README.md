@@ -137,7 +137,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-ONNXRUNTIME_NODE_INSTALL=skip npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.4.0/bismyth-lead-tui-0.4.0.tgz
+ONNXRUNTIME_NODE_INSTALL=skip npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.4.1/bismyth-lead-tui-0.4.1.tgz
 bismyth-leads
 ```
 
@@ -170,3 +170,5 @@ Setup downloads about 1.7 GB into the local cache and verifies that the pinned c
 The initial integration uses Laya as an intent adviser. It cannot independently suppress a reply, opt out a contact, book a meeting or bypass permissions. Confidence alone is not evidence of correctness; see the local evaluation and limitations in [Laya/relogin verification](leads/docs/verification-laya-relogin-2026-10-17.md). The writer remains responsible for the final context-sensitive response and stage. No claim is made that this removes the writer call needed for each substantive reply.
 
 Upstream: [Laya](https://github.com/NandhaKishorM/laya), [Node ONNX runtime](https://github.com/receptron/laya). Model revision: `d42786bdff8a7550316339c5fbf8f46caa83ea1b` from `receptron/laya-onnx`.
+
+The running build version appears beneath the Oracle Leads logo. In compact terminals it appears on the right side of the status footer. The label comes from the compiled frontend version.

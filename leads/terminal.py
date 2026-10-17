@@ -512,7 +512,7 @@ def main():
     parser.add_argument('--data-dir',type=Path,help='Separate persistent workspace directory')
     parser.add_argument('--connect',help='Connect to an existing loopback service instead of starting one')
     parser.add_argument('--service',action='store_true',help='Run the local service without the TUI')
-    parser.add_argument('--version',action='version',version='Oracle Leads 0.4.0')
+    parser.add_argument('--version',action='version',version='Oracle Leads 0.4.1')
     parser.add_argument('--setup-laya',action='store_true',help='Download and verify the local Laya decision model; no outreach is started')
     parser.add_argument('--legacy-ui',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args()

@@ -1,0 +1,13 @@
+WIDE LOGO
+                      │
+  ◈  ORACLE           │
+     L E A D S        │
+     v0.4.1           │
+                      │
+  WORKSPACE           │
+                      │
+COMPACT FOOTER
+────────────────────────────────────────────────────────────────────────────────
+  Your relationship memory is local. Outreach starts paused.            v0.4.1
+  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q
+PASS: compiled version beneath logo at 128x40 and in compact footer at 80x24; 2.21s; isolated synthetic service, no customer messages.

@@ -16,6 +16,7 @@ pub const MUTED: Color = Color::Rgb(132, 145, 158);
 pub const ACCENT: Color = Color::Rgb(133, 224, 186);
 pub const SELECTED: Color = Color::Rgb(31, 52, 48);
 pub const GOLD: Color = Color::Rgb(228, 190, 115);
+const VERSION: &str = concat!("v", env!("CARGO_PKG_VERSION"));
 pub fn safe(s: &str) -> String {
     s.chars()
         .filter(|c| !c.is_control() || *c == '\n')
@@ -182,6 +183,7 @@ fn nav(f: &mut Frame, app: &mut App, area: Rect, wide: bool) {
         f.render_widget(rail, area);
         label(f, rect(area.x + 2, area.y + 1, 19, 1), "◈  ORACLE", ACCENT);
         label(f, rect(area.x + 5, area.y + 2, 16, 1), "L E A D S", FG);
+        label(f, rect(area.x + 5, area.y + 3, 16, 1), VERSION, MUTED);
         label(f, rect(area.x + 2, area.y + 5, 18, 1), "WORKSPACE", MUTED);
         for (i, (number, name, description)) in pages.iter().enumerate() {
             let y = area.y + 7 + i as u16 * 3;
@@ -354,9 +356,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         footer,
     );
     let spinner = ["◐", "◓", "◑", "◒"][(app.tick / 3 % 4) as usize];
+    let version_space = if wide { 0 } else { VERSION.len() as u16 + 2 };
     label(
         f,
-        rect(2, footer.y + 1, area.width - 4, 1),
+        rect(2, footer.y + 1, area.width - 4 - version_space, 1),
         format!(
             "{}{}",
             if app.busy {
@@ -368,6 +371,19 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         ),
         if app.busy { ACCENT } else { MUTED },
     );
+    if !wide {
+        label(
+            f,
+            rect(
+                area.right() - 2 - VERSION.len() as u16,
+                footer.y + 1,
+                VERSION.len() as u16,
+                1,
+            ),
+            VERSION,
+            MUTED,
+        );
+    }
     label(
         f,
         rect(2, footer.y + 2, area.width - 4, 1),
