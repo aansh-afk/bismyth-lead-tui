@@ -115,6 +115,7 @@ export class Agent {
     ).reverse() : [];
     const result = await this.model.complete({
       mode: job.kind === "opener" ? "autonomous_introduction" : "autonomous_reply",
+      contact_id: c.id,
       contact: { name:c.name, company:c.company, role:c.role, notes:c.notes, source:c.source, stage:c.stage, next_action:c.next_action, followup_at:c.followup_at },
       messages: detail.messages.slice(-40), memories: [...stableFacts,...detail.memories.filter(m=>m.kind==="model_summary").slice(0,5)], meetings: detail.meetings,
       links: { meeting:s.settings().meeting_link, success:s.settings().success_link, unsuccessful:s.settings().unsuccessful_link },
@@ -124,7 +125,7 @@ export class Agent {
       instruction: job.kind === "opener"
         ? "Write one concise, honest Atlas introduction for this permitted new relationship. Personalize only from recorded facts; never pretend prior contact or infer a business problem from a job title. Ask one useful question. This message will send automatically."
         : "Each incoming_message_events item is a distinct new event, even if its text repeats an earlier message. Respond to the new_message and all new events in their current conversational context; a saved replied stage never means a fresh message was answered. Several short messages can share one coherent response. Help interested prospects, answer objections honestly, and use the approved meeting link when appropriate. A decline deserves at most one polite closure, never another pitch. Use nurture for genuine later timing, low_intent only for repeated noncommittal deflections supported by the conversation, and never accuse anyone of dishonesty. Preserve advanced client/meeting stages. Do not invent interest, dates, bookings, facts or commitments. This message will send automatically.",
-    });
+    }, { isCurrent: () => this.valid(job) && !s.settings().automation_paused && Boolean(s.contact(c.id).auto_reply) });
     if (!this.valid(job) || s.settings().automation_paused || !s.contact(c.id).auto_reply) {
       s.run("UPDATE jobs SET status='cancelled',error='Access or context changed during generation.' WHERE id=?", job.id);return;
     }

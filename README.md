@@ -22,7 +22,7 @@ Requirements: Python 3.11+ with curses (Linux/macOS), Node.js 24+, and the depen
 
 ```sh
 cd /path/to/bismyth-lead-tui
-npm ci
+ONNXRUNTIME_NODE_INSTALL=skip npm ci
 npm run build:tui # Rust toolchain required when building from source
 npm start
 ```
@@ -48,6 +48,8 @@ Dashboard chat is read-only: it can explain the records but cannot send messages
 **C** connects the local Baileys service and displays its QR. Scan it yourself from WhatsApp → Linked devices → Link a device. The connected phone identity comes from the paired account. Use **Disconnect** or **Unlink** with explicit confirmation. The inbox lists only contacts currently active for that sender.
 
 If scanning fails, choose **Enter phone number** (or press **F** on page 2), also available as **Enter phone number instead** inside the QR dialog. Enter your WhatsApp number with its country code. Oracle shows an eight-character pairing code. On your phone, open **WhatsApp → Linked devices → Link a device → Link with phone number instead**, then enter that code. Keep the phone online; if WhatsApp rejects a code, request a fresh one or choose **Use QR**.
+
+If WhatsApp expires the session, a relogin prompt appears on any page. Choose **Get a pairing code for the same number** or **Scan QR with the same number**. **Later** dismisses it; **Relogin** remains on the WhatsApp toolbar. Expired credentials are replaced without deleting contacts, memories or permissions. A different number is rejected during recovery; use explicit Unlink to switch accounts. After relinking, press **Start Agent** to resume. Quiet hours still apply. Temporary network loss reconnects automatically.
 
 An entered number is only a pairing target. The account becomes the verified sender after WhatsApp confirms linking. An already-linked account must be explicitly unlinked before pairing another number. Pairing never activates contacts or starts automation. Codes are visible only in the private local pairing session and are cleared on success/disconnect; they are excluded from relationship backups and activity logs.
 
@@ -135,7 +137,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.3.0/bismyth-lead-tui-0.3.0.tgz
+ONNXRUNTIME_NODE_INSTALL=skip npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.4.0/bismyth-lead-tui-0.4.0.tgz
 bismyth-leads
 ```
 
@@ -154,3 +156,17 @@ The v0.1.x property-enquiry implementation remains in `src/`; its historical gui
 Settings → Response timing defaults to a **5–15 second pause before composing and between automatic sends**; model generation time is additional. Set both values to zero for immediate processing. Incoming responses take priority over introductions. Quiet hours and the daily cap still delay dispatch. Each launch begins paused until you press Start Agent.
 
 Context is contact-specific and bounded to recent conversation and stored memory; it does not import the full WhatsApp message archive. Saved stages and messages are the source of truth for prior contact. Starting does not create external calendar bookings or invent follow-up dates. Legacy draft APIs remain for compatibility and are not part of the autonomous UI flow.
+
+## Local Laya decisions
+
+Laya runs on this device through the pinned `@receptron/laya` ONNX CPU runtime, in a separate worker so the TUI remains responsive. It classifies each new incoming event using the recent salesperson message and new message bundle. It does not generate customer messages. The selected Codex/self-hosted writer receives the full relationship context and the local intent hint, writes the reply, and verifies the classification. There is no additional Codex call just for Laya decisions and no human review queue.
+
+```sh
+bismyth-leads --setup-laya
+```
+
+Setup downloads about 1.7 GB into the local cache and verifies that the pinned checkpoint loads. Once installed, runtime inference reads local files only. Settings → **Decision engine** switches between **Local Laya + automatic writer fallback** and **Writer handles decisions**. Introductions and operator chat do not invoke Laya. Missing models, inference errors, non-Latin input, oversized context and uncertain classifications fall back automatically. This English checkpoint does not establish Hindi/Hinglish accuracy. The worker uses two CPU threads.
+
+The initial integration uses Laya as an intent adviser. It cannot independently suppress a reply, opt out a contact, book a meeting or bypass permissions. Confidence alone is not evidence of correctness; see the local evaluation and limitations in [Laya/relogin verification](leads/docs/verification-laya-relogin-2026-10-17.md). The writer remains responsible for the final context-sensitive response and stage. No claim is made that this removes the writer call needed for each substantive reply.
+
+Upstream: [Laya](https://github.com/NandhaKishorM/laya), [Node ONNX runtime](https://github.com/receptron/laya). Model revision: `d42786bdff8a7550316339c5fbf8f46caa83ea1b` from `receptron/laya-onnx`.

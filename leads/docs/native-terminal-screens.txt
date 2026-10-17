@@ -10,9 +10,9 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 actions underway  ·  0.0 min active  ·  Agent paused
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 14:49  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
+      Scoped inbox    │  │ 15:16  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
                       │  │                                                                │ │                                                                │
-  03  Contacts        │  │ 14:49  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
+  03  Contacts        │  │ 15:16  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
       People & memory │  │                                                                │ │ promised a client.                                             │
                       │  │                                                                │ │                                                                │
   04  Settings        │  │                                                                │ │                                                                │
@@ -102,19 +102,19 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 actions underway  ·  0.0 min active  ·  Agent paused
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 14:49  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  14:49                                                     │
+      Scoped inbox    │  │ 15:16  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  15:16                                                     │
                       │  │                                                                │ │ What happened last run?                                        │
-  03  Contacts        │  │ 14:49  Fixture 01: relationship or agent access updated.       │ │                                                                │
-      People & memory │  │                                                                │ │ ORACLE  14:49                                                  │
-                      │  │ 14:49  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
+  03  Contacts        │  │ 15:16  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      People & memory │  │                                                                │ │ ORACLE  15:16                                                  │
+                      │  │ 15:16  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
   04  Settings        │  │                                                                │ │                                                                │
-      Agent settings  │  │ 14:49  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      Agent settings  │  │ 15:16  Fixture 01: relationship or agent access updated.       │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 14:49  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
+                      │  │ 15:16  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 14:49  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
+                      │  │ 15:16  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 14:49  Oracle Leads started. Outreach is paused.               │ │                                                                │
+                      │  │ 15:16  Oracle Leads started. Outreach is paused.               │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
@@ -153,19 +153,19 @@
   03  Contacts        │  │  Fixture 01                                   │ ╰─────────────────────────────────────────────────────────────────────────────────╯
       People & memory │  │  +12025550001                                 │   Overview     Chat     Memory
                       │  │› Fixture 02                                   │ ╭ CONVERSATION ───────────────────────────────────────────────────────────────────╮
-  04  Settings        │  │  +12025550002                                 │ │ YOU  14:49 sent                                                                 │
+  04  Settings        │  │  +12025550002                                 │ │ YOU  15:16 sent                                                                 │
       Agent settings  │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ CONTACT  14:50 received                                                         │
+                      │  │                                               │ │ CONTACT  15:16 received                                                         │
                       │  │                                               │ │ Can we arrange an Atlas walkthrough?                                            │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ YOU  14:50 sent                                                                 │
+                      │  │                                               │ │ YOU  15:16 sent                                                                 │
                       │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ CONTACT  14:50 received                                                         │
+                      │  │                                               │ │ CONTACT  15:16 received                                                         │
                       │  │                                               │ │ Can we arrange an Atlas walkthrough?                                            │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ YOU  14:50 sent                                                                 │
+                      │  │                                               │ │ YOU  15:16 sent                                                                 │
                       │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
   MODEL               │  │                                               │ │                                                                                 │
@@ -190,16 +190,16 @@
                       │
   WORKSPACE           │  ╭ AGENT & WORKSPACE ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
                       │  │  Model provider            codex                                                                                                  │
-  01  Dashboard       │  │  Sales instructions        You are Oracle Leads, the Atlas relationship assistant for Bismyth. Be                                 │
-      Overview & chat │  │  Atlas knowledge           Atlas supports lead intake, ownership and follow-ups, site visits, com                                 │
-                      │  │  Response timing           Immediate                                                                                              │
-  02  WhatsApp        │  │  Daily send limit          25                                                                                                     │
-      Scoped inbox    │  │  Quiet hours               00:00 — 00:00                                                                                          │
-                      │  │  Meeting booking link      Not configured                                                                                         │
-  03  Contacts        │  │  Successful meeting link   Not configured                                                                                         │
-      People & memory │  │  Unsuccessful meeting link Not configured                                                                                         │
-                      │  │  Model override            Not configured                                                                                         │
-  04  Settings        │  │                                                                                                                                   │
+  01  Dashboard       │  │  Decision engine           laya ·                                                                                                 │
+      Overview & chat │  │  Sales instructions        You are Oracle Leads, the Atlas relationship assistant for Bismyth. Be                                 │
+                      │  │  Atlas knowledge           Atlas supports lead intake, ownership and follow-ups, site visits, com                                 │
+  02  WhatsApp        │  │  Response timing           Immediate                                                                                              │
+      Scoped inbox    │  │  Daily send limit          25                                                                                                     │
+                      │  │  Quiet hours               00:00 — 00:00                                                                                          │
+  03  Contacts        │  │  Meeting booking link      Not configured                                                                                         │
+      People & memory │  │  Successful meeting link   Not configured                                                                                         │
+                      │  │  Unsuccessful meeting link Not configured                                                                                         │
+  04  Settings        │  │  Model override            Not configured                                                                                         │
       Agent settings  │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
@@ -238,6 +238,7 @@
 
   ╭ AGENT & WORKSPACE ───────────────────────────────────────────────────────╮
   │  Model provider            codex                                         │
+  │  Decision engine           laya ·                                        │
   │  Sales instructions        You are Oracle Leads, the Atlas relationship  │
   │  Atlas knowledge           Atlas supports lead intake, ownership and fol │
   │  Response timing           Immediate                                     │
@@ -245,7 +246,6 @@
   │  Quiet hours               00:00 — 00:00                                 │
   │  Meeting booking link      Not configured                                │
   │  Successful meeting link   Not configured                                │
-  │  Unsuccessful meeting link Not configured                                │
   ╰──────────────────────────────────────────────────────────────────────────╯
 
     Verify provider     Backup     Restore

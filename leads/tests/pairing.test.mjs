@@ -141,3 +141,27 @@ test('fresh live and reconnect-backlog events respect scope and WhatsApp second 
  for(const [type,id,phone,at]of [['notify','fresh','12025550101',second],['append','backlog','12025550101',second],['append','old','12025550101',second-1],['notify','unapproved','12025550102',second]]){f.sockets[0].ev.emit('messages.upsert',{type,messages:[{key:{id,remoteJid:phone+'@s.whatsapp.net'},message:{conversation:'A new message'},messageTimestamp:at}]});await tick();}
  assert.deepEqual(received.map(e=>e.externalId),['fresh','backlog']);assert(received.every(e=>e.historical===false));
 });
+test('expired authentication prompts same-number relogin without deleting CRM or permissions',async t=>{
+ const f=fixture(t);await f.transport.connect();const old=f.sockets[0];f.creds.me={id:'12025550199:1@s.whatsapp.net'};old.ev.emit('connection.update',{connection:'open'});
+ f.store.importContacts([{phone:'+12025550101',name:'Saved relationship'}]);const c=f.store.state().contacts[0];f.store.patchContact(c.id,{active:true,consent:true},'+12025550199');f.store.memory(c.id,'Keep this fact');f.store.saveSettings({automation_paused:false,quiet_start:21,quiet_end:9});
+ old.ev.emit('connection.update',{connection:'close',lastDisconnect:{error:{output:{statusCode:401}}}});
+ const status=f.transport.status();assert.equal(status.relogin_required,true);assert.equal(status.relogin_phone,'+12025550199');assert(status.relogin_id);assert.equal(f.store.settings().automation_paused,true);assert.equal(f.store.settings().quiet_start,21);assert.equal(f.store.contact(c.id).active,1);assert.equal(f.store.detail(c.id).memories.length,1);assert.equal(f.store.one('SELECT COUNT(*) AS n FROM auth').n,0);
+ await assert.rejects(f.transport.pairPhone('+12025550198'),/previously verified/);assert.equal(f.sockets.length,1);
+ const request=f.transport.relogin('phone');while(f.sockets.length<2)await tick();f.sockets[1].ev.emit('connection.update',{connection:'connecting'});await request;assert.deepEqual(f.calls,['12025550199']);assert.equal(f.transport.status().relogin_required,true);
+ f.sockets[1].ev.emit('connection.update',{connection:'open'});assert.equal(f.transport.status().relogin_required,false);assert.equal(f.transport.status().phone,'+12025550199');assert.equal(f.store.contact(c.id).active,1);assert.equal(f.store.settings().automation_paused,true);
+ old.ev.emit('creds.update',{registered:true});assert.equal(f.transport.status().phone,'+12025550199');
+});
+test('expired-session recovery persists across restart and never silently accepts a different QR account',async t=>{
+ const f=fixture(t);await f.transport.connect();f.creds.me={id:'12025550199:1@s.whatsapp.net'};f.sockets[0].ev.emit('connection.update',{connection:'open'});f.sockets[0].ev.emit('connection.update',{connection:'close',lastDisconnect:{error:{output:{statusCode:500}}}});
+ const recovered=new WhatsApp(f.store,async()=>{},{loadModules:f.transport.loadModules});t.after(()=>recovered.disconnect());await recovered.resumeSession();assert.equal(recovered.status().relogin_phone,'+12025550199');assert.equal(recovered.status().status,'logged_out');assert.equal(f.sockets.length,1);
+ await recovered.relogin('qr');const wrong=f.sockets[1];wrong.user.id='12025550198:1@s.whatsapp.net';wrong.ev.emit('connection.update',{connection:'open'});assert.equal(recovered.status().status,'logged_out');assert.equal(recovered.status().relogin_required,true);assert.equal(f.store.get('sender'),'+12025550199');assert.equal(f.store.one('SELECT COUNT(*) AS n FROM auth').n,0);assert(wrong.ended);
+ await recovered.unlink();assert.equal(recovered.status().relogin_required,false);
+});
+test('relogin rejects invalid or unnecessary requests; a network outage does not clear authentication',async t=>{
+ const f=fixture(t,{reconnectDelay:1000});await assert.rejects(f.transport.relogin('other'),/phone code or QR/);await assert.rejects(f.transport.relogin(),/No expired/);
+ await f.transport.connect();f.creds.me={id:'12025550199:1@s.whatsapp.net'};f.sockets[0].ev.emit('creds.update',{registered:true});f.sockets[0].ev.emit('connection.update',{connection:'open'});f.sockets[0].ev.emit('connection.update',{connection:'close',lastDisconnect:{error:{output:{statusCode:408}}}});assert(f.store.one("SELECT value FROM auth WHERE key='creds'"));assert.equal(f.transport.status().relogin_required,false);
+});
+test('relogin HTTP endpoint is authenticated and forwards the selected recovery method',async t=>{
+ const dir=mkdtempSync(join(tmpdir(),'oracle-relogin-http-'));const methods=[];const app=await createApp({dataDir:dir,modelFactory:()=>({}),transportFactory:()=>({status:()=>({status:'logged_out',relogin_required:true,relogin_phone:'+12025550199'}),disconnect(){},async relogin(method){methods.push(method);return {status:'pairing_code_ready'};}})});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});const base=`http://127.0.0.1:${app.server.address().port}`;
+ assert.equal((await fetch(base+'/api/whatsapp/relogin',{method:'POST',body:'{}'})).status,401);const b=await fetch(base+'/api/bootstrap',{headers:{'X-Oracle-Key':app.localToken}});const cookie=b.headers.get('set-cookie').split(';')[0];const r=await fetch(base+'/api/whatsapp/relogin',{method:'POST',headers:{Cookie:cookie,'X-Oracle-Request':'1','Content-Type':'application/json'},body:JSON.stringify({method:'qr'})});assert.equal(r.status,200);assert.deepEqual(methods,['qr']);assert.equal(app.store.state().analytics.contacts,0);
+});

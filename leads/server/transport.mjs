@@ -44,13 +44,22 @@ export class WhatsApp {
     this.state = { status: "disconnected", phone: null, qr: null, error: null };
   }
   status() {
-    return { ...this.state };
+    const recovery = this.store.get("whatsapp_relogin");
+    return { ...this.state, relogin_required: Boolean(recovery), relogin_phone: recovery?.phone || null, relogin_id: recovery?.id || null };
   }
   async resumeSession() {
+    if (this.store.get("whatsapp_relogin")) {
+      this.state = { status: "logged_out", phone: null, qr: null, error: "WhatsApp session expired. Relink the same number to continue." };
+      return this.status();
+    }
     const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
     if (stored && linkedCredentials(JSON.parse(stored.value))) return this.connect();
   }
-  async connect({ qr = false } = {}) {
+  async connect({ qr = false, recovery = false } = {}) {
+    if (this.store.get("whatsapp_relogin") && !recovery) {
+      if (qr) return this.relogin("qr");
+      return this.status();
+    }
     if (qr && this.state.pairing_mode === "phone" && this.state.status !== "connected") {
       this.disconnect();
       const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
@@ -193,6 +202,15 @@ export class WhatsApp {
             this.disconnect();
             return;
           }
+          const recovery = this.store.get("whatsapp_relogin");
+          const expected = recovery?.phone;
+          if (expected && expected !== `+${raw}`) {
+            this.disconnect();
+            this.store.run("DELETE FROM auth");
+            this.state = { status: "logged_out", phone: null, qr: null, error: "A different WhatsApp number was linked. Relink the previous number, or explicitly Unlink before switching accounts." };
+            this.store.saveSettings({ automation_paused: true });
+            return;
+          }
           this.state = {
             status: "connected",
             phone: `+${raw}`,
@@ -202,6 +220,10 @@ export class WhatsApp {
           delete creds.pairingCode;
           put("creds", creds);
           this.store.bindSender(this.state.phone);
+          if (recovery) {
+            this.store.set("whatsapp_relogin", null);
+            this.store.activity("whatsapp_relinked", "Previous WhatsApp number relinked. Press Start Agent to resume outreach.");
+          }
           if(creds.myAppStateKeyId)void this.refreshContacts().catch(()=>{});
           else this.state.directory_status="waiting_for_keys";
           if(pendingContacts.length)void receiveContacts(pendingContacts.splice(0)).catch(()=>{if(this.socket===sock)this.state.directory_error="Contact metadata could not be loaded. Reconnect or import a CSV.";});
@@ -212,24 +234,33 @@ export class WhatsApp {
         }
         if (update.connection === "close") {
           const code = update.lastDisconnect?.error?.output?.statusCode;
-          const shouldReconnect = (linkedCredentials(creds) || code === DisconnectReason.restartRequired) && code !== DisconnectReason.loggedOut && code !== DisconnectReason.connectionReplaced;
+          const expired = [DisconnectReason.loggedOut, 500, 411].includes(code);
+          const shouldReconnect = (linkedCredentials(creds) || code === DisconnectReason.restartRequired) && !expired && code !== DisconnectReason.connectionReplaced;
+          if (expired) {
+            const previous = this.store.get("whatsapp_relogin");
+            const raw = jidDecode(creds.me?.id || sock.user?.id)?.user || "";
+            const phone = this.state.phone || previous?.phone || this.store.get("sender") || (/^[1-9]\d{7,14}$/.test(raw) ? `+${raw}` : null);
+            this.store.set("whatsapp_relogin", { phone, id: previous?.id || `${Date.now()}-${this.generation}` });
+            this.store.run("DELETE FROM auth");
+            this.store.activity("whatsapp_relogin_required", "WhatsApp authentication expired. Relink the previous number; outreach is paused.");
+          }
           this.socket = null;
           this.directorySyncing=null;
           this.pairingReady = false;
           this.connecting = false;
           this.state = {
             status:
-              code === DisconnectReason.loggedOut
+              expired
                 ? "logged_out"
                 : "disconnected",
             phone: null,
             qr: null,
             error:
-              code === DisconnectReason.loggedOut
-                ? "Session logged out. Unlink locally before pairing again."
+              expired
+                ? "WhatsApp session expired. Relink the same number using phone code or QR. Contacts and memory are preserved."
                 : shouldReconnect ? "Connection lost. Reconnecting automatically." : "Connection closed. Reconnect to continue.",
           };
-          if (code === DisconnectReason.loggedOut || code === DisconnectReason.connectionReplaced)
+          if (expired || code === DisconnectReason.connectionReplaced)
             this.store.saveSettings({ automation_paused: true });
           if (shouldReconnect)
             this.timer = setTimeout(() => this.connect().catch(() => {}), this.reconnectDelayMs);
@@ -364,6 +395,14 @@ export class WhatsApp {
   }
   async pairPhone(value) {
     const digits = pairingPhone(value);
+    const recovery = this.store.get("whatsapp_relogin");
+    if (recovery) {
+      if (recovery.phone !== `+${digits}`) throw new Error("Relink the previously verified number. Unlink explicitly to switch accounts.");
+      if (this.pairingAttempt) throw new Error("A pairing request is already in progress.");
+      this.disconnect();
+      this.store.run("DELETE FROM auth");
+      this.store.saveSettings({ automation_paused: true });
+    }
     const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
     if (this.state.status === "connected" || (stored && linkedCredentials(JSON.parse(stored.value))))
       throw new Error("An account is already linked. Reconnect it, or unlink before choosing a different number.");
@@ -372,7 +411,7 @@ export class WhatsApp {
     this.pairingAttempt = attempt;
     let sock;
     try {
-      await this.connect();
+      await this.connect({ recovery: Boolean(recovery) });
       if (this.pairingAttempt !== attempt) throw new Error("Pairing cancelled.");
       this.state = { ...this.state, status: "pairing_requesting", pairing_mode: "phone", pairing_phone: `+${digits}`, pairing_code: null, qr_matrix: undefined, error: null };
       await new Promise((resolve, reject) => {
@@ -427,6 +466,17 @@ export class WhatsApp {
       throw new Error("WhatsApp send outcome is uncertain.");
     return result.key.id;
   }
+  async relogin(method = "phone") {
+    if (!["phone", "qr"].includes(method)) throw new Error("Choose phone code or QR relogin.");
+    const recovery = this.store.get("whatsapp_relogin");
+    if (!recovery) throw new Error("No expired WhatsApp session needs relogin.");
+    if (this.pairingAttempt || this.connecting) throw new Error("A relogin request is already in progress.");
+    if (method === "phone" && !recovery.phone) throw new Error("The previous number is unavailable. Use QR to relink.");
+    this.disconnect();
+    this.store.run("DELETE FROM auth");
+    this.store.saveSettings({ automation_paused: true });
+    return method === "phone" ? this.pairPhone(recovery.phone) : this.connect({ qr: true, recovery: true });
+  }
   disconnect() {
     this.generation++;
     this.directorySyncing=null;
@@ -457,6 +507,8 @@ export class WhatsApp {
       }
     }
     this.store.run("DELETE FROM auth");
+    this.store.set("whatsapp_relogin", null);
+    this.store.set("sender", null);
     this.store.run(
       "UPDATE contacts SET active=0,scope_version=scope_version+1",
     );

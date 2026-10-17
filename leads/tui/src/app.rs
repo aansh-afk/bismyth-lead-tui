@@ -214,6 +214,7 @@ pub struct App {
     pub quit: bool,
     pub last_refresh: Instant,
     pub tick: u64,
+    pub relogin_seen: String,
     pub rx: Receiver<Completion>,
     pub tx: Sender<Completion>,
 }
@@ -245,6 +246,7 @@ impl App {
             quit: false,
             last_refresh: Instant::now(),
             tick: 0,
+            relogin_seen: String::new(),
             rx,
             tx,
         };
@@ -349,6 +351,41 @@ impl App {
         };
         self.last_refresh = Instant::now();
         self.refresh_detail();
+        self.prompt_relogin();
+    }
+    fn prompt_relogin(&mut self) {
+        let wa = &self.state["whatsapp"];
+        let id = strv(wa, "relogin_id").to_owned();
+        if wa["relogin_required"].as_bool().unwrap_or(false)
+            && !id.is_empty()
+            && id != self.relogin_seen
+            && self.modal.is_none()
+            && !self.busy
+        {
+            self.relogin_seen = id;
+            self.relogin_menu();
+        }
+    }
+    pub fn relogin_menu(&mut self) {
+        let phone = strv(&self.state["whatsapp"], "relogin_phone");
+        let hint = format!(
+            "Session expired. Relink {phone}. Memory is saved. After linking, press Start Agent."
+        );
+        self.menu(
+            "Relink your WhatsApp number",
+            &hint,
+            vec![
+                (
+                    "Get a pairing code for the same number",
+                    Action::new("relogin-phone", Value::Null),
+                ),
+                (
+                    "Scan QR with the same number",
+                    Action::new("relogin-qr", Value::Null),
+                ),
+                ("Later", Action::new("modal-close", Value::Null)),
+            ],
+        );
     }
     pub fn refresh_detail(&mut self) {
         let rows = self.contacts();
@@ -598,6 +635,15 @@ impl App {
         vec![
             ("Model provider", strv(s, "provider").into(), "provider"),
             (
+                "Decision engine",
+                format!(
+                    "{} · {}",
+                    strv(s, "decision_provider"),
+                    strv(&self.state["decisions"], "phase")
+                ),
+                "decision_provider",
+            ),
+            (
                 "Sales instructions",
                 clip(strv(s, "system_prompt"), 70),
                 "system_prompt",
@@ -655,6 +701,10 @@ impl App {
     pub fn setting(&mut self, key: &str) {
         match key {
             "provider" => self.provider_menu(),
+            "decision_provider" => self.menu("Decision engine", strv(&self.state["decisions"],"detail").to_owned().as_str(), vec![
+                ("Local Laya + automatic writer fallback", Action::new("settings-save", json!({"decision_provider":"laya"}))),
+                ("Writer handles decisions", Action::new("settings-save", json!({"decision_provider":"writer"}))),
+            ]),
             "delay" => self.form(
                 "Response timing",
                 "Seconds before composing and between automatic sends. Set both to 0 for immediate action.",
@@ -735,7 +785,9 @@ impl App {
             "meetings"=>self.meetings(action.data.as_bool().unwrap_or(false)),
             "meeting"=>{let m=action.data;let mut items=vec![];for status in ["booked","successful","unsuccessful","cancelled"]{items.push((format!("Mark {status}"),Action::new("request",json!({"path":"/api/meeting/update","body":{"id":m["id"],"status":status},"notice":"Meeting outcome saved."}))));}items.push(("Delete meeting record".into(),Action::new("meeting-delete",m)));self.owned_menu("Meeting outcome","Configured outcome links are prepared only while the contact remains in scope.",items);},
             "meeting-delete"=>self.confirm("Delete meeting record?",strv(&action.data,"title").into(),Action::new("request",json!({"path":"/api/meeting/delete","body":{"id":action.data["id"]},"notice":"Meeting record deleted."}))),
-            "pair-phone"=>self.form("Link with phone number instead","Enter your WhatsApp number including country code. You will enter the displayed pairing code on your phone.","pair-phone",Value::Null,vec![Field::new("WhatsApp number · +country code",strv(&self.state["whatsapp"],"pairing_phone"),false)]),
+            "pair-phone"=>{if self.state["whatsapp"]["relogin_required"].as_bool().unwrap_or(false){self.relogin_menu();}else{self.form("Link with phone number instead","Enter your WhatsApp number including country code. You will enter the displayed pairing code on your phone.","pair-phone",Value::Null,vec![Field::new("WhatsApp number · +country code",strv(&self.state["whatsapp"],"pairing_phone"),false)]);}},
+            "relogin"=>self.relogin_menu(),
+            "relogin-phone"|"relogin-qr"=>{self.modal=Some(Modal::Qr);self.request("/api/whatsapp/relogin",json!({"method":if action.name=="relogin-phone"{"phone"}else{"qr"}}),"Relink the previous number. Press Start Agent after linking.","");},
             "connect"=>{self.modal=Some(Modal::Qr);self.request("/api/whatsapp/connect",json!({}),"WhatsApp connection requested.","");},
             "disconnect"=>self.request("/api/whatsapp/disconnect",json!({}),"WhatsApp disconnected. Agent paused.",""),
             "unlink"=>self.confirm("Unlink WhatsApp?","Remove the local pairing and deactivate all contacts. You can also remove Oracle Leads from Linked devices on your phone.".into(),Action::new("request",json!({"path":"/api/whatsapp/unlink","body":{},"notice":"WhatsApp unlinked."}))),

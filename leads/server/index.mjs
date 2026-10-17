@@ -114,6 +114,7 @@ export async function createApp({
             whatsapp: transport.status(),
             agent_busy: agent.busy,
             agent_status: agent.status(),
+            decisions: model.decisions?.status() || null,
           });
         if (path === "/api/provider") return send(200, await model.status());
         if (path.startsWith("/api/contact/"))
@@ -152,6 +153,8 @@ export async function createApp({
         return send(200, await transport.connect({ qr: true }));
       if (path === "/api/whatsapp/pair-phone")
         return send(200, await transport.pairPhone(body.phone));
+      if (path === "/api/whatsapp/relogin")
+        return send(200, await transport.relogin(body.method || "phone"));
       if (path === "/api/whatsapp/disconnect") {
         transport.disconnect();
         store.saveSettings({ automation_paused: true });

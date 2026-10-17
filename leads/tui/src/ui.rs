@@ -572,8 +572,19 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             app,
             x,
             header[0].y,
-            "Connect / QR",
-            Action::new("connect", Value::Null),
+            if s["whatsapp"]["relogin_required"].as_bool().unwrap_or(false) {
+                "Relogin"
+            } else {
+                "Connect / QR"
+            },
+            Action::new(
+                if s["whatsapp"]["relogin_required"].as_bool().unwrap_or(false) {
+                    "relogin"
+                } else {
+                    "connect"
+                },
+                Value::Null,
+            ),
             strv(&s["whatsapp"], "status") != "connected",
         );
         x = button(
@@ -1409,7 +1420,14 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
             label(
                 f,
                 rect(inner.x, inner.y, inner.width, 2),
-                "On your phone: WhatsApp → Linked devices → Link a device.\nThe scanned account becomes the verified sender.",
+                if wa["relogin_required"].as_bool().unwrap_or(false) {
+                    format!(
+                        "Relink {} on WhatsApp → Linked devices → Link a device.\nYour contacts and memory are saved. Press Start Agent after linking.",
+                        strv(&wa, "relogin_phone")
+                    )
+                } else {
+                    "On your phone: WhatsApp → Linked devices → Link a device.\nThe scanned account becomes the verified sender.".into()
+                },
                 MUTED,
             );
             if strv(&wa, "status") == "connected" {

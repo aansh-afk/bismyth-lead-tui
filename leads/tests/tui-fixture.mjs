@@ -2,8 +2,9 @@
 import { createApp } from "../server/index.mjs";
 if (process.env.ORACLE_LEADS_FIXTURE !== "1")
   throw new Error("Explicit fixture mode required.");
-const pairingFixture=process.env.ORACLE_LEADS_PAIRING_FIXTURE==="1";
-let pairingState={status:"disconnected",phone:null,error:null};
+const reloginFixture=process.env.ORACLE_LEADS_RELOGIN_FIXTURE==="1";
+const pairingFixture=process.env.ORACLE_LEADS_PAIRING_FIXTURE==="1" || reloginFixture;
+let pairingState=reloginFixture ? {status:"logged_out",phone:null,error:"Session expired",relogin_required:true,relogin_phone:"+12025550199",relogin_id:"fixture-expired"} : {status:"disconnected",phone:null,error:null};
 let app;
 app = await createApp({
   dataDir: process.env.ORACLE_LEADS_DATA,
@@ -31,6 +32,7 @@ app = await createApp({
     disconnect() {pairingState={status:"disconnected",phone:null,error:null};},
     async connect() {pairingState={status:"qr_ready",phone:null,error:null,qr_matrix:{size:1,data:[1]}};return pairingState;},
     async pairPhone(phone) {if(!phone.includes("12025550199"))throw new Error("Synthetic number only.");pairingState={status:"pairing_code_ready",phone:null,pairing_mode:"phone",pairing_phone:"+12025550199",pairing_code:"ABCD1234"};return pairingState;},
+    async relogin(method) {pairingState={...pairingState,status:method==="phone"?"pairing_code_ready":"qr_ready",pairing_mode:method==="phone"?"phone":"qr",pairing_phone:"+12025550199",pairing_code:method==="phone"?"ABCD1234":null,qr_matrix:method==="qr"?{size:1,data:[1]}:undefined};return pairingState;},
     async send(number, text, messageId) {
       app.store.activity(
         "fixture_transport",
