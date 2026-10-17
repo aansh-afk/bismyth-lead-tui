@@ -135,8 +135,10 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.3/bismyth-lead-tui-0.2.3.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.4/bismyth-lead-tui-0.2.4.tgz
 bismyth-leads
 ```
+
+Saved WhatsApp sessions reconnect automatically while the outreach agent stays paused. `oracle-leads` and `oracle` open the same current interface; `oracle configure-selfhost` retains endpoint configuration.
 
 The v0.1.x property-enquiry implementation remains in `src/`; its historical guide is in [docs/legacy-bismyth-leads.md](docs/legacy-bismyth-leads.md). The default launcher is the Oracle Leads outreach workspace. License notices for the retained Oracle engine are preserved in `ORACLE-LICENSE` and `UPSTREAM-NOTICE`.

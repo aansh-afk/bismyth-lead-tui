@@ -59,6 +59,29 @@ test("timeouts and request failures clear the code and permit an explicit retry"
 test("a linked account cannot be replaced by entering another phone number",async t=>{
  const f=fixture(t);f.store.run("INSERT INTO auth VALUES(?,?)","creds",JSON.stringify({registered:true}));await assert.rejects(f.transport.pairPhone("12025550199"),/already linked/);assert.equal(f.sockets.length,0);
 });
+test("a QR-linked identity resumes even when Baileys registered is false",async t=>{
+ const f=fixture(t);
+ await f.transport.resumeSession();assert.equal(f.sockets.length,0);
+ f.store.run("INSERT INTO auth VALUES(?,?)","creds",JSON.stringify({registered:false,me:{id:"12025550199:1@s.whatsapp.net"}}));
+ await f.transport.resumeSession();assert.equal(f.sockets.length,1);assert.equal(f.creds.me.id,"12025550199:1@s.whatsapp.net");assert.equal(f.calls.length,0);
+ await assert.rejects(f.transport.pairPhone("12025550198"),/already linked/);
+ assert.equal(f.store.state().analytics.active,0);
+});
+test("switching to QR preserves an existing QR-linked identity and auth keys",async t=>{
+ const f=fixture(t);f.store.run("INSERT INTO auth VALUES(?,?)","creds",JSON.stringify({registered:false,me:{id:"12025550199:1@s.whatsapp.net"}}));
+ f.store.run("INSERT INTO auth VALUES(?,?)","fixture-key",JSON.stringify({keep:true}));
+ f.transport.state.pairing_mode="phone";await f.transport.connect({qr:true});
+ assert.equal(f.creds.me.id,"12025550199:1@s.whatsapp.net");assert(f.store.one("SELECT value FROM auth WHERE key='fixture-key'"));assert.equal(f.calls.length,0);
+});
+test("service restart resumes a linked account and keeps outreach paused",async t=>{
+ const f=fixture(t);const dir=mkdtempSync(join(tmpdir(),"oracle-resume-http-"));
+ const first=await createApp({dataDir:dir,modelFactory:()=>({}),transportFactory:()=>({disconnect(){}})});
+ first.store.run("INSERT INTO auth VALUES(?,?)","creds",JSON.stringify({registered:false,me:{id:"12025550199:1@s.whatsapp.net"}}));first.store.saveSettings({automation_paused:false});await first.close();
+ const app=await createApp({dataDir:dir,modelFactory:()=>({}),transportFactory:(store,receive)=>new WhatsApp(store,receive,{loadModules:f.transport.loadModules})});
+ t.after(async()=>{await app.close();rmSync(dir,{recursive:true,force:true});});
+ await ready(f,{connection:"open"});await tick();
+ assert.equal(app.transport.status().status,"connected");assert.equal(app.store.settings().automation_paused,true);assert.equal(app.store.state().contacts.length,0);assert.equal(f.calls.length,0);
+});
 test("switching back to QR cancels phone-code state without activating contacts",async t=>{
  const f=fixture(t);const request=f.transport.pairPhone("12025550199");await ready(f);await request;await f.transport.connect({qr:true});assert.equal(f.sockets.length,2);assert.equal(f.sockets[0].ended,true);assert.equal(f.transport.status().pairing_code,undefined);
  f.sockets[1].ev.emit("connection.update",{qr:"fresh-qr"});assert.equal(f.transport.status().status,"qr_ready");

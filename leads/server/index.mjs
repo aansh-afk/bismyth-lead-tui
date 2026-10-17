@@ -337,6 +337,8 @@ export async function createApp({
   }, 3600000);
   const worker = setInterval(() => agent.tick().catch(() => {}), 1200),
     heartbeat = setInterval(() => store.heartbeat(), 5000);
+  // Reuse an explicitly linked account; the store keeps outreach paused on startup.
+  void transport.resumeSession?.().catch(() => {});
   return {
     localToken: token,
     server,

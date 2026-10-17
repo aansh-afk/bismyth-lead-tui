@@ -1,6 +1,10 @@
 const defaultModules = () => Promise.all([
   import("@whiskeysockets/baileys"), import("pino"), import("qrcode"),
 ]);
+// QR-linked Baileys sessions can have a confirmed identity while registered is false.
+function linkedCredentials(creds) {
+  return Boolean(creds?.registered || creds?.me?.id);
+}
 export function pairingPhone(value) {
   if (typeof value !== "string" || !/^\+?[0-9 ()-]+$/.test(value.trim()))
     throw new Error("Enter an international phone number with its country code.");
@@ -41,11 +45,15 @@ export class WhatsApp {
   status() {
     return { ...this.state };
   }
+  async resumeSession() {
+    const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
+    if (stored && linkedCredentials(JSON.parse(stored.value))) return this.connect();
+  }
   async connect({ qr = false } = {}) {
     if (qr && this.state.pairing_mode === "phone" && this.state.status !== "connected") {
       this.disconnect();
       const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
-      if (stored && !JSON.parse(stored.value).registered) this.store.run("DELETE FROM auth");
+      if (stored && !linkedCredentials(JSON.parse(stored.value))) this.store.run("DELETE FROM auth");
     }
     if (this.connecting || this.socket) return this.status();
     clearTimeout(this.timer);
@@ -221,7 +229,7 @@ export class WhatsApp {
           };
           this.store.saveSettings({ automation_paused: true });
           if (
-            (creds.registered || code === DisconnectReason.restartRequired) &&
+            (linkedCredentials(creds) || code === DisconnectReason.restartRequired) &&
             code !== DisconnectReason.loggedOut &&
             code !== DisconnectReason.connectionReplaced
           )
@@ -358,7 +366,7 @@ export class WhatsApp {
   async pairPhone(value) {
     const digits = pairingPhone(value);
     const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
-    if (this.state.status === "connected" || (stored && JSON.parse(stored.value).registered))
+    if (this.state.status === "connected" || (stored && linkedCredentials(JSON.parse(stored.value))))
       throw new Error("An account is already linked. Reconnect it, or unlink before choosing a different number.");
     if (this.pairingAttempt) throw new Error("A pairing request is already in progress.");
     const attempt = Symbol("pairing");
