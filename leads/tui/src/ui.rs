@@ -365,7 +365,9 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     label(
         f,
         rect(2, footer.y + 2, area.width - 4, 1),
-        if app.composer_focus {
+        if app.search_focus {
+            "Live search · ↑↓ select results · Enter / Esc leave search · Clear resets · Click a contact to preview"
+        } else if app.composer_focus {
             "Enter send question · Esc leave composer · Tab focus · Mouse click & scroll"
         } else {
             "1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit"
@@ -555,7 +557,7 @@ fn dashboard(f: &mut Frame, app: &mut App, area: Rect) {
 fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
     let whatsapp = app.page == 1;
     let s = app.state.clone();
-    let header = Layout::vertical([Constraint::Length(3), Constraint::Min(4)]).split(area);
+    let header = Layout::vertical([Constraint::Length(5), Constraint::Min(5)]).split(area);
     let mut x = header[0].x;
     if whatsapp {
         x = button(
@@ -585,7 +587,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             Action::new("disconnect", Value::Null),
             false,
         );
-        if x + 14 < header[0].right() {
+        if x + 10 < header[0].right() {
             button(
                 f,
                 app,
@@ -596,20 +598,6 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
                 false,
             );
         }
-        label(
-            f,
-            rect(header[0].x, header[0].y + 2, header[0].width, 1),
-            format!(
-                "{}  {} · Only active scope is monitored",
-                strv(&s["whatsapp"], "status").to_uppercase(),
-                if strv(&s["whatsapp"], "phone").is_empty() {
-                    "No account paired"
-                } else {
-                    strv(&s["whatsapp"], "phone")
-                }
-            ),
-            MUTED,
-        );
     } else {
         x = button(
             f,
@@ -638,8 +626,8 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             Action::new("search", Value::Null),
             false,
         );
-        if x + 18 < header[0].right() {
-            button(
+        if x + 15 < header[0].right() {
+            x = button(
                 f,
                 app,
                 x,
@@ -649,90 +637,190 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
                 false,
             );
         }
+        if x + 21 < header[0].right() {
+            button(
+                f,
+                app,
+                x,
+                header[0].y,
+                if strv(&s["whatsapp"], "status") == "connected" {
+                    "Refresh WhatsApp"
+                } else {
+                    "Connect WhatsApp"
+                },
+                if strv(&s["whatsapp"], "status") == "connected" {
+                    Action::new("refresh-contacts", Value::Null)
+                } else {
+                    Action::new("page", json!(1))
+                },
+                false,
+            );
+        }
+    }
+    let source_hint = if whatsapp {
+        format!(
+            "{}  {} · Only enabled scope is monitored",
+            strv(&s["whatsapp"], "status").to_uppercase(),
+            if strv(&s["whatsapp"], "phone").is_empty() {
+                "No account paired"
+            } else {
+                strv(&s["whatsapp"], "phone")
+            }
+        )
+    } else {
+        let known = list(&s, "contacts")
+            .iter()
+            .filter(|c| c["whatsapp_known"].as_bool().unwrap_or(false))
+            .count();
+        if !strv(&s["whatsapp"], "directory_error").is_empty() {
+            strv(&s["whatsapp"], "directory_error").into()
+        } else if strv(&s["directory"]["legacy"], "status") == "error" {
+            strv(&s["directory"]["legacy"], "error").into()
+        } else if strv(&s["whatsapp"], "directory_status") == "syncing" {
+            "Receiving available WhatsApp contact updates…".into()
+        } else if strv(&s["whatsapp"], "directory_status") == "waiting_for_keys" {
+            "WhatsApp contact sync is waiting for your phone. Keep it online, then Refresh WhatsApp.".into()
+        } else {
+            format!(
+                "Saved leads + WhatsApp contacts · {known} shared by WhatsApp · Listing does not enable outreach"
+            )
+        }
+    };
+    label(
+        f,
+        rect(header[0].x, header[0].y + 1, header[0].width, 1),
+        source_hint,
+        MUTED,
+    );
+    let search = rect(
+        header[0].x,
+        header[0].y + 2,
+        header[0].width.saturating_sub(10),
+        1,
+    );
+    f.render_widget(
+        Block::default().style(Style::default().bg(if app.search_focus {
+            SELECTED
+        } else {
+            PANEL
+        })),
+        search,
+    );
+    let width = search.width.saturating_sub(2) as usize;
+    let (lines, cursor, _) = app.search_editor.wrapped(width);
+    let shown = if app.search.is_empty() {
+        "Search name, phone, company…  /".into()
+    } else {
+        lines.get(cursor.0).cloned().unwrap_or_default()
+    };
+    label(
+        f,
+        rect(search.x + 1, search.y, search.width.saturating_sub(2), 1),
+        shown,
+        if app.search.is_empty() { MUTED } else { FG },
+    );
+    app.hits.push((search, Hit::Search(search, cursor.0)));
+    if app.search_focus {
+        f.set_cursor_position((
+            search.x + 1 + cursor.1.min(width.saturating_sub(1)) as u16,
+            search.y,
+        ));
+    }
+    button(
+        f,
+        app,
+        header[0].right() - 9,
+        search.y,
+        "Clear",
+        Action::new("clear-search", Value::Null),
+        false,
+    );
+    let mut fx = header[0].x;
+    for (name, key) in [
+        ("All", "all"),
+        ("Enabled", "enabled"),
+        ("WhatsApp", "whatsapp"),
+        ("Saved", "saved"),
+    ] {
+        fx = button(
+            f,
+            app,
+            fx,
+            header[0].y + 3,
+            name,
+            Action::new("filter", json!(key)),
+            app.contact_filter == key,
+        );
+    }
+    let rows = app.contacts();
+    let count = rows.len();
+    if fx + 15 < header[0].right() {
         label(
             f,
-            rect(header[0].x, header[0].y + 2, header[0].width, 1),
-            if app.search.is_empty() {
-                "Import adds relationships. Permission and activation are separate.".into()
-            } else {
-                format!("Filter: {} · / to change", app.search)
-            },
+            rect(fx + 1, header[0].y + 3, header[0].right() - fx - 1, 1),
+            format!("{count} results"),
             MUTED,
         );
     }
     let split = Layout::horizontal(if area.width >= 94 {
         vec![
-            Constraint::Percentage(if whatsapp { 34 } else { 57 }),
+            Constraint::Percentage(if whatsapp { 37 } else { 55 }),
             Constraint::Fill(1),
         ]
-    } else if whatsapp {
-        vec![Constraint::Length(24), Constraint::Fill(1)]
     } else {
-        vec![Constraint::Fill(1), Constraint::Length(0)]
+        vec![Constraint::Percentage(43), Constraint::Fill(1)]
     })
     .spacing(1)
     .split(header[1]);
     let table_area = panel(
         f,
         split[0],
-        if whatsapp { "SCOPED INBOX" } else { "CONTACTS" },
+        &format!(
+            "{} · {}",
+            if whatsapp { "SCOPED INBOX" } else { "CONTACTS" },
+            count
+        ),
     );
-    let rows = app.contacts();
     if rows.is_empty() {
-        let empty = vec![
-            Line::from(""),
-            Line::from(if whatsapp {
-                "No active conversations."
-            } else {
-                "Your relationship workspace is empty."
-            }),
-            Line::from(""),
-            Line::from(if whatsapp {
-                "Pair your number, then explicitly enable selected contacts."
-            } else {
-                "Import a CSV or JSON file. Every new contact starts inactive."
-            }),
-        ];
+        let filtered = !app.search.is_empty() || app.contact_filter != "all";
+        let text = if filtered {
+            "No matching contacts.\n\nTry a name, company or phone number. Clear resets the search and source filter."
+        } else if whatsapp {
+            "No active conversations.\n\nPair your number, then explicitly enable selected contacts from Contacts."
+        } else {
+            "Your relationship workspace is empty.\n\nConnect WhatsApp to receive available contacts, use Older runs, or import a CSV."
+        };
         f.render_widget(
-            Paragraph::new(empty)
+            Paragraph::new(text)
                 .style(Style::default().fg(MUTED))
                 .wrap(Wrap { trim: true }),
             inset(table_area, 1, 0),
         );
-        if split[1].width > 0 {
-            let right = panel(f, split[1], "RELATIONSHIP CONTEXT");
-            label(
-                f,
-                inset(right, 1, 1),
-                "Select a relationship to see its conversation, permanent memory and next step.",
-                MUTED,
-            );
-        }
+        let right = panel(f, split[1], "CONTACT PREVIEW");
+        f.render_widget(Paragraph::new("Select a result to see their details, conversation and permanent memory.\n\nBrowsing never activates a contact or sends a message.").style(Style::default().fg(MUTED)).wrap(Wrap{trim:true}),inset(right,1,0));
         return;
     }
-    let mut state = TableState::default().with_selected(Some(app.row.min(rows.len() - 1)));
+    let compact = table_area.width < 65;
     let data = rows
         .iter()
         .map(|c| {
             let access = if num(c, "opted_out") == 1 {
                 "opted out"
             } else if num(c, "active") == 1 {
-                "active"
+                "enabled"
             } else {
-                "inactive"
+                "listed only"
             };
-            if whatsapp {
-                Row::new(vec![
-                    Cell::from(Line::from(vec![Span::styled(
-                        safe(strv(c, "name")),
-                        Style::default().fg(FG),
-                    )])),
-                    Cell::from(safe(strv(c, "stage"))),
-                ])
+            if compact {
+                Row::new(vec![Cell::from(ratatui::text::Text::from(vec![
+                    Line::from(safe(strv(c, "name"))),
+                    Line::styled(safe(strv(c, "phone")), Style::default().fg(MUTED)),
+                ]))])
                 .height(2)
             } else {
                 Row::new(vec![
                     Cell::from(safe(strv(c, "name"))),
+                    Cell::from(safe(strv(c, "phone"))),
                     Cell::from(safe(strv(c, "company"))),
                     Cell::from(safe(strv(c, "stage"))),
                     Cell::from(access),
@@ -741,21 +829,23 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             }
         })
         .collect::<Vec<_>>();
-    let widths = if whatsapp {
-        vec![Constraint::Fill(1), Constraint::Length(11)]
+    let widths = if compact {
+        vec![Constraint::Fill(1)]
     } else {
         vec![
             Constraint::Fill(2),
-            Constraint::Fill(2),
             Constraint::Length(16),
-            Constraint::Length(9),
+            Constraint::Fill(2),
+            Constraint::Length(12),
+            Constraint::Length(11),
         ]
     };
-    let titles = if whatsapp {
-        vec!["Relationship", "Stage"]
+    let titles = if compact {
+        vec!["Name / phone"]
     } else {
-        vec!["Name", "Company", "Stage", "Access"]
+        vec!["Name", "Phone", "Company", "Stage", "Access"]
     };
+    let mut state = TableState::default().with_selected(Some(app.row.min(rows.len() - 1)));
     let table = Table::new(data, widths)
         .header(
             Row::new(titles)
@@ -766,7 +856,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_symbol("› ");
     f.render_stateful_widget(table, table_area, &mut state);
     let offset = state.offset();
-    let row_height = if whatsapp { 2 } else { 1 };
+    let row_height = if compact { 2 } else { 1 };
     for i in offset..rows.len() {
         let y = table_area.y + 2 + (i - offset) as u16 * row_height;
         if y + row_height > table_area.bottom() {
@@ -778,34 +868,56 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         ));
     }
     app.hits.push((table_area, Hit::List));
-    if split[1].width == 0 {
+    let c = app.contact();
+    if c.is_null() {
+        let r = panel(f, split[1], "CONTACT PREVIEW");
+        label(
+            f,
+            r,
+            "Contact details are unavailable. Refresh to try again.",
+            GOLD,
+        );
         return;
     }
-    let c = app.contact();
     let pieces = Layout::vertical([
         Constraint::Length(4),
-        Constraint::Min(5),
-        Constraint::Length(3),
+        Constraint::Length(1),
+        Constraint::Min(3),
+        Constraint::Length(1),
     ])
     .split(split[1]);
     let heading = panel(f, pieces[0], &clip(strv(&c, "name"), 36));
     label(
         f,
-        rect(heading.x + 1, heading.y, heading.width - 2, 1),
-        format!("{} · {}", strv(&c, "phone"), strv(&c, "company")),
+        rect(heading.x + 1, heading.y, heading.width.saturating_sub(2), 1),
+        format!("{} · {}", strv(&c, "phone"), strv(&c, "stage")),
         MUTED,
     );
-    button(
+    label(
         f,
-        app,
-        heading.x + 1,
-        heading.y + 1,
-        "Actions",
-        Action::new("contact-actions", Value::Null),
-        false,
+        rect(
+            heading.x + 1,
+            heading.y + 1,
+            heading.width.saturating_sub(2),
+            1,
+        ),
+        format!("{} {}", strv(&c, "company"), strv(&c, "role")),
+        FG,
     );
-    if whatsapp {
-        let content = panel(f, pieces[1], "CONVERSATION");
+    let mut tx = pieces[1].x;
+    for (i, name) in ["Overview", "Chat", "Memory"].iter().enumerate() {
+        tx = button(
+            f,
+            app,
+            tx,
+            pieces[1].y,
+            name,
+            Action::new("detail-tab", json!(i)),
+            app.detail_tab == i,
+        );
+    }
+    if app.detail_tab == 1 {
+        let content = panel(f, pieces[2], "CONVERSATION");
         history(
             f,
             inset(content, 1, 0),
@@ -815,22 +927,62 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         );
         app.hits.push((content, Hit::Transcript));
     } else {
-        let content = panel(f, pieces[1], "RELATIONSHIP MEMORY");
-        let mut lines = vec![
-            Line::from(Span::styled("NEXT ACTION", Style::default().fg(ACCENT))),
-            Line::from(if strv(&c, "next_action").is_empty() {
-                "No next action recorded".into()
+        let content = panel(
+            f,
+            pieces[2],
+            if app.detail_tab == 2 {
+                "PERMANENT MEMORY"
             } else {
-                safe(strv(&c, "next_action"))
-            }),
-            Line::from(safe(strv(&c, "followup_at"))),
-            Line::from(""),
-            Line::from(Span::styled(
+                "RELATIONSHIP MEMORY"
+            },
+        );
+        let mut lines = vec![];
+        let mut add = |title: &str, value: String| {
+            lines.push(Line::from(Span::styled(
+                title.to_owned(),
+                Style::default().fg(ACCENT),
+            )));
+            lines.extend(
+                wrap(&value, content.width.saturating_sub(2) as usize)
+                    .into_iter()
+                    .map(Line::from),
+            );
+            lines.push(Line::from(""));
+        };
+        if app.detail_tab == 0 {
+            let access = if num(&c, "opted_out") == 1 {
+                "Opted out · outreach stopped"
+            } else if num(&c, "active") == 1 {
+                "Enabled · sender permission recorded"
+            } else {
+                "Listed only · outreach is paused for this contact"
+            };
+            add("ACCESS", access.into());
+            add(
+                "NEXT ACTION",
+                if strv(&c, "next_action").is_empty() {
+                    "No next action recorded".into()
+                } else {
+                    format!("{}\n{}", strv(&c, "next_action"), strv(&c, "followup_at"))
+                },
+            );
+            if !strv(&c, "notes").is_empty() {
+                add("NOTES", strv(&c, "notes").into());
+            }
+            add("SOURCE", strv(&c, "source").into());
+        }
+        if list(&app.detail, "memories").is_empty() {
+            add(
+                "PERMANENT MEMORY",
+                "No facts saved yet. Add a note from Actions.".into(),
+            );
+        } else {
+            lines.push(Line::from(Span::styled(
                 "PERMANENT MEMORY",
                 Style::default().fg(ACCENT),
-            )),
-        ];
-        for m in list(&app.detail, "memories").into_iter().take(4) {
+            )));
+        }
+        for m in list(&app.detail, "memories") {
             lines.extend(
                 wrap(
                     strv(&m, "content"),
@@ -853,41 +1005,48 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             )));
             lines.push(Line::from(""));
         }
-        if list(&app.detail, "memories").is_empty() {
-            lines.push(Line::from("No facts saved yet. Add a note from Actions."));
-        }
         f.render_widget(
             Paragraph::new(lines)
                 .style(Style::default().fg(FG))
-                .wrap(Wrap { trim: true }),
+                .scroll((app.thread_scroll.min(u16::MAX as usize) as u16, 0)),
             inset(content, 1, 0),
         );
+        app.hits.push((content, Hit::Transcript));
     }
-    let mut x = pieces[2].x;
-    x = button(
+    let mut ax = pieces[3].x;
+    ax = button(
         f,
         app,
-        x,
-        pieces[2].y + 1,
+        ax,
+        pieces[3].y,
         "Write",
         Action::new("write", Value::Null),
         true,
     );
-    x = button(
+    ax = button(
         f,
         app,
-        x,
-        pieces[2].y + 1,
+        ax,
+        pieces[3].y,
         "Drafts",
         Action::new("jobs", Value::Null),
         false,
     );
-    if x + 13 < pieces[2].right() {
+    ax = button(
+        f,
+        app,
+        ax,
+        pieces[3].y,
+        "Actions",
+        Action::new("contact-actions", Value::Null),
+        false,
+    );
+    if ax + 13 < pieces[3].right() {
         button(
             f,
             app,
-            x,
-            pieces[2].y + 1,
+            ax,
+            pieces[3].y,
             "Generate",
             Action::new("generate", Value::Null),
             false,

@@ -10,19 +10,19 @@ import { createApp } from "../server/index.mjs";
 function fixture(t, options={}) {
  const dir=mkdtempSync(join(tmpdir(),"oracle-pairing-"));
  const store=new Store(join(dir,"test.sqlite"));
- const calls=[], sockets=[];
+ const calls=[], sockets=[],syncCalls=[];
  let creds;
  const makeSocket=config=>{
-  creds=config.auth.creds;
-  const socket={ev:new EventEmitter(),user:{id:"12025550199:1@s.whatsapp.net"},end(){this.ended=true;},async logout(){},async requestPairingCode(number){calls.push(number);return options.request?options.request(number):"ABCD1234";}};
+  creds=config.auth.creds;if(options.config)options.config(config);
+  const socket={ev:new EventEmitter(),user:{id:"12025550199:1@s.whatsapp.net"},end(){this.ended=true;},async logout(){},async resyncAppState(names,initial){syncCalls.push({names,initial});return options.sync?options.sync():undefined;},async requestPairingCode(number){calls.push(number);return options.request?options.request(number):"ABCD1234";}};
   sockets.push(socket);return socket;
  };
  const transport=new WhatsApp(store,async()=>{}, {pairingTimeoutMs:options.timeout||200,loadModules:async()=>[
-  {default:makeSocket,BufferJSON:{},initAuthCreds:()=>({registered:false}),proto:{},DisconnectReason:{loggedOut:401,connectionReplaced:440,restartRequired:515},jidDecode:id=>({user:id?.split(":")[0]}),Browsers:{ubuntu:()=>["Ubuntu","Chrome","1"]}},
+  {default:makeSocket,ALL_WA_PATCH_NAMES:["regular","regular_low"],BufferJSON:{},initAuthCreds:()=>({registered:false}),proto:{},DisconnectReason:{loggedOut:401,connectionReplaced:440,restartRequired:515},jidDecode:id=>({user:id?.split(":")[0]}),Browsers:{ubuntu:()=>["Ubuntu","Chrome","1"]}},
   {default:()=>({})},{default:{create:()=>({modules:{size:1,data:[1]}})}}
  ]});
  t.after(()=>{transport.disconnect();store.db.close();rmSync(dir,{recursive:true,force:true});});
- return {store,transport,calls,sockets,get creds(){return creds;}};
+ return {store,transport,calls,sockets,syncCalls,get creds(){return creds;}};
 }
 const tick=()=>new Promise(r=>setTimeout(r,5));
 async function ready(f,update={connection:"connecting"}){while(!f.sockets.length)await tick();f.sockets.at(-1).ev.emit("connection.update",update);}
@@ -81,4 +81,28 @@ test("disconnect during socket initialization prevents a stale socket from being
  const f=fixture(t);const load=f.transport.loadModules;let release;
  f.transport.loadModules=()=>new Promise(r=>release=r);
  const request=f.transport.pairPhone("12025550199");await tick();f.transport.disconnect();release(await load());await request;assert.equal(f.sockets.length,0);assert.equal(f.transport.status().status,"disconnected");
+});
+test("WhatsApp metadata lists exact phone contacts without monitoring unapproved messages",async t=>{
+ const f=fixture(t);await f.transport.connect();const socket=f.sockets[0];
+ socket.ev.emit('contacts.upsert',[{id:'12025550101@s.whatsapp.net',name:'Before connect'},{id:'12345@g.us',name:'Group'}]);socket.ev.emit('connection.update',{connection:'open'});await tick();
+ socket.ev.emit('contacts.update',[{id:'opaque@lid',phoneNumber:'12025550102@s.whatsapp.net',name:'Linked phone'},{id:'unknown@lid',name:'Unknown'},{id:null}]);await tick();
+ const rows=f.store.state().contacts;assert.equal(rows.length,2);assert(rows.every(c=>c.active===0 && c.consent===0));assert.equal(f.store.state().analytics.replies,0);
+ f.transport.disconnect();socket.ev.emit('contacts.upsert',[{id:'12025550103@s.whatsapp.net',name:'Stale'}]);await tick();assert.equal(f.store.state().contacts.length,2);
+});
+test("contact refresh requests app-state updates without enabling history sync or unscoped messages",async t=>{
+ let config;const f=fixture(t,{config:value=>config=value});await assert.rejects(f.transport.refreshContacts(),/Connect WhatsApp/);await f.transport.connect();f.sockets[0].ev.emit('connection.update',{connection:'open'});
+ assert.equal(config.shouldSyncHistoryMessage({}),false);assert.equal(Boolean(config.shouldIgnoreJid('12025550103@s.whatsapp.net')),true);
+ await f.transport.refreshContacts();assert.deepEqual(f.syncCalls,[{names:['regular','regular_low'],initial:false}]);assert.equal(f.transport.status().directory_status,'ready');assert.equal(f.store.state().contacts.length,0);
+});
+test("contact sync starts when linked-device app-state keys become available",async t=>{
+ const f=fixture(t);await f.transport.connect();f.sockets[0].ev.emit('connection.update',{connection:'open'});assert.equal(f.syncCalls.length,0);f.sockets[0].ev.emit('creds.update',{myAppStateKeyId:'fixture-key'});await tick();assert.equal(f.syncCalls.length,1);
+});
+test("contact refresh prevents overlap and discards a disconnected result",async t=>{
+ let finish;const f=fixture(t,{sync:()=>new Promise(r=>finish=r)});await f.transport.connect();f.sockets[0].ev.emit('connection.update',{connection:'open'});const request=f.transport.refreshContacts();await assert.rejects(f.transport.refreshContacts(),/already being checked/);f.transport.disconnect();finish();await request;assert.equal(f.transport.status().status,'disconnected');assert.equal(f.transport.status().directory_status,undefined);
+});
+test("a contact whose LID mapping arrives later is listed only after a valid phone mapping",async t=>{
+ const f=fixture(t);await f.transport.connect();const socket=f.sockets[0];socket.ev.emit('connection.update',{connection:'open'});
+ socket.ev.emit('contacts.upsert',[{id:'later@lid',name:'Later contact'}]);await tick();assert.equal(f.store.state().contacts.length,0);
+ socket.ev.emit('lid-mapping.update',{lid:'later@lid',pn:'not-a-phone'});await tick();assert.equal(f.store.state().contacts.length,0);
+ socket.ev.emit('lid-mapping.update',{lid:'later@lid',pn:'12025550104@s.whatsapp.net'});await tick();const c=f.store.state().contacts[0];assert.equal(c.name,'Later contact');assert.equal(c.phone,'+12025550104');assert.equal(c.active,0);assert.equal(c.consent,0);
 });

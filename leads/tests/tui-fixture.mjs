@@ -27,6 +27,7 @@ app = await createApp({
       qr: null,
       error: null,
     }),
+    async refreshContacts(){return {ok:true};},
     disconnect() {pairingState={status:"disconnected",phone:null,error:null};},
     async connect() {pairingState={status:"qr_ready",phone:null,error:null,qr_matrix:{size:1,data:[1]}};return pairingState;},
     async pairPhone(phone) {if(!phone.includes("12025550199"))throw new Error("Synthetic number only.");pairingState={status:"pairing_code_ready",phone:null,pairing_mode:"phone",pairing_phone:"+12025550199",pairing_code:"ABCD1234"};return pairingState;},
@@ -41,6 +42,14 @@ app = await createApp({
 });
 if(!pairingFixture) app.store.bindSender("+12025550199");
 app.store.saveSettings({ quiet_start: 0, quiet_end: 0 });
+if(process.env.ORACLE_LEADS_DIRECTORY_FIXTURE==="1"){
+  app.store.importContacts(Array.from({length:40},(_,i)=>({name:`Fixture ${String(i+1).padStart(2,'0')}`,phone:`+1202555${String(i+1).padStart(4,'0')}`,company:"Synthetic Brokerage",role:i===38?"Owner":"",source:"Saved fixture"})));
+  app.store.syncContactDirectory([{phone:"+12025550038",name:"Fixture 38"},{phone:"+12025550039",name:"Fixture 39"},{phone:"+12025550200",name:"WhatsApp Person"}]);
+  const selected=app.store.one("SELECT * FROM contacts WHERE phone=?","+12025550039");
+  app.store.patchContact(selected.id,{next_action:"Call Thursday",notes:"Prefers email",stage:"interested"},"+12025550199");
+  app.store.memory(selected.id,"Met at the expo");app.store.addMessage(selected.id,"in","Please send the Atlas walkthrough","received","fixture-directory-message");
+  const first=app.store.one("SELECT * FROM contacts WHERE phone=?","+12025550001");app.store.patchContact(first.id,{active:true,consent:true},"+12025550199");
+}
 app.server.listen(0, "127.0.0.1", () =>
   console.log(JSON.stringify({ port: app.server.address().port })),
 );

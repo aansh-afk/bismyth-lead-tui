@@ -88,6 +88,9 @@ fn event_loop(
                     if let Some(field) = fields.get_mut(*focus) {
                         field.edit.insert(&text);
                     }
+                } else if app.search_focus {
+                    app.search_editor.insert(&text.replace(['\n', '\r'], " "));
+                    app.update_search();
                 } else if app.composer_focus {
                     app.composer.insert(&text);
                 }
@@ -101,7 +104,7 @@ fn event_loop(
                         .max_by_key(|(_, h)| match h {
                             Hit::Action(_) | Hit::Menu(_) | Hit::Field(..) => 3,
                             Hit::Contact(_) => 2,
-                            Hit::Composer(..) => 1,
+                            Hit::Composer(..) | Hit::Search(..) => 1,
                             _ => 0,
                         })
                         .cloned();
@@ -117,6 +120,7 @@ fn event_loop(
                                             && t.elapsed() < Duration::from_millis(450)
                                     })
                                     .unwrap_or(false);
+                                app.search_focus = false;
                                 app.select(index);
                                 if double {
                                     app.open_contact_actions();
@@ -158,7 +162,19 @@ fn event_loop(
                                     offset,
                                 );
                             }
-                            Hit::Transcript => app.composer_focus = false,
+                            Hit::Search(r, offset) => {
+                                app.focus_search();
+                                app.search_editor.click(
+                                    0,
+                                    mouse.column.saturating_sub(r.x + 1) as usize,
+                                    r.width.saturating_sub(2) as usize,
+                                    offset,
+                                );
+                            }
+                            Hit::Transcript => {
+                                app.composer_focus = false;
+                                app.search_focus = false;
+                            }
                             Hit::List => {}
                         }
                     }
@@ -204,7 +220,12 @@ fn event_loop(
                             } else {
                                 &mut app.thread_scroll
                             };
-                            *scroll = if up {
+                            let backwards = if matches!(app.page, 1 | 2) && app.detail_tab != 1 {
+                                !up
+                            } else {
+                                up
+                            };
+                            *scroll = if backwards {
                                 (*scroll + 3).min(10000)
                             } else {
                                 scroll.saturating_sub(3)
@@ -326,6 +347,25 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         }
         return;
     }
+    if key.modifiers.contains(KeyModifiers::CONTROL)
+        && key.code == KeyCode::Char('f')
+        && matches!(app.page, 1 | 2)
+    {
+        app.focus_search();
+        return;
+    }
+    if app.search_focus {
+        match key.code {
+            KeyCode::Esc | KeyCode::Enter | KeyCode::Tab | KeyCode::Down => {
+                app.search_focus = false
+            }
+            _ => {
+                app.search_editor.key(key, false);
+                app.update_search();
+            }
+        }
+        return;
+    }
     if app.composer_focus {
         match key.code {
             KeyCode::Esc | KeyCode::Tab => app.composer_focus = false,
@@ -391,6 +431,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             } else {
                 app.composer_focus = true;
             }
+        }
+        KeyCode::PageUp if matches!(app.page, 1 | 2) => app.select(app.row.saturating_sub(10)),
+        KeyCode::PageDown if matches!(app.page, 1 | 2) => {
+            app.select((app.row + 10).min(app.contacts().len().saturating_sub(1)))
+        }
+        KeyCode::Home if matches!(app.page, 1 | 2) => app.select(0),
+        KeyCode::End if matches!(app.page, 1 | 2) => {
+            app.select(app.contacts().len().saturating_sub(1))
         }
         KeyCode::Char('/') => app.perform(Action::new("search", Value::Null)),
         KeyCode::Char('c') if app.page == 0 => app.composer_focus = true,

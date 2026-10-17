@@ -19,7 +19,7 @@ def main():
     if expected in '\n'.join(screen.display):return
    raise AssertionError('Missing '+expected+'\n'+'\n'.join(screen.display))
   try:
-   wait('Choose your model');child.send('1');wait('Relationship overview');wait('Start agent');child.send('2');wait('No account paired');child.send('3');wait('Your relationship workspace is empty');child.send('4');wait('Workspace settings');child.send('v');wait('ChatGPT subscription connected.');child.setwinsize(24,80);time.sleep(.5);child.send('r');wait('Workspace settings');child.send('q');child.expect(pexpect.EOF,timeout=15)
+   wait('Choose your model');child.send('1');wait('Relationship overview');wait('Start agent');child.send('2');wait('No account paired');child.send('3');wait('CONTACTS · 0');child.send('4');wait('Workspace settings');child.send('v');wait('ChatGPT subscription connected.');child.setwinsize(24,80);time.sleep(.5);child.send('r');wait('Workspace settings');child.send('q');child.expect(pexpect.EOF,timeout=15)
    assert (Path(directory)/'oracle-leads.sqlite').exists()
    assert list((Path(directory)/'backups').glob('*.json'))
    assert not (Path(directory)/'service.lock').exists()

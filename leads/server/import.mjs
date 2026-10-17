@@ -106,3 +106,13 @@ export async function legacyRows() {
   }
   return rows;
 }
+
+export async function loadSavedDirectory(store, loader=legacyRows) {
+  if(store.get("directory_legacy_loaded")) return;
+  try {
+    const rows=await loader();let added=0,duplicates=0,invalid=0;
+    for(let i=0;i<rows.length;i+=10000){const result=store.importContacts(rows.slice(i,i+10000));added+=result.added;duplicates+=result.duplicates;invalid+=result.errors.length;}
+    store.set("directory_legacy",{status:"loaded",added,duplicates,invalid});
+    store.set("directory_legacy_loaded",true);
+  }catch{store.set("directory_legacy",{status:"error",error:"Saved leads could not be loaded. Use Older runs to retry or import a CSV."});}
+}

@@ -16,10 +16,12 @@ import { Store, text } from "./store.mjs";
 import { Model } from "./model.mjs";
 import { WhatsApp } from "./transport.mjs";
 import { Agent } from "./agent.mjs";
-import { csvRows, csvExport, legacyRows } from "./import.mjs";
+import { csvRows, csvExport, legacyRows, loadSavedDirectory } from "./import.mjs";
 export async function createApp({
   dataDir = process.env.ORACLE_LEADS_DATA ||
     join(homedir(), ".local/share/oracle-leads"),
+  loadSavedContacts = dataDir === join(homedir(), ".local/share/oracle-leads"),
+  savedContactsLoader = legacyRows,
   modelFactory = (s) => new Model(s),
   transportFactory = (s, receive) => new WhatsApp(s, receive),
 } = {}) {
@@ -56,6 +58,7 @@ export async function createApp({
   writeFileSync(lock, JSON.stringify({ pid: process.pid, nonce }));
   closeSync(lock);
   const store = new Store(join(dataDir, "oracle-leads.sqlite"));
+  if(loadSavedContacts) await loadSavedDirectory(store,savedContactsLoader);
   const model = modelFactory(store);
   let agent;
   const transport = transportFactory(store, (e) => agent.receive(e));
@@ -141,6 +144,7 @@ export async function createApp({
       }
       const body = JSON.parse(raw || "{}");
       if (path === "/api/settings") return send(200, store.saveSettings(body));
+      if (path === "/api/contacts/refresh") return send(200,await transport.refreshContacts());
       if (path === "/api/whatsapp/connect")
         return send(200, await transport.connect({ qr: true }));
       if (path === "/api/whatsapp/pair-phone")
@@ -181,6 +185,7 @@ export async function createApp({
       if (path === "/api/contact/delete") {
         const c = store.contact(body.id);
         store.run("DELETE FROM contacts WHERE id=?", c.id);
+        store.set(`directory_deleted:${c.phone}`,true);
         store.run("DELETE FROM activity WHERE contact_id=?", c.id);
         store.activity(
           "contact_deleted",

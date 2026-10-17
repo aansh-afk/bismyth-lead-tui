@@ -22,6 +22,33 @@ pub fn list(v: &Value, key: &str) -> Vec<Value> {
 pub fn clip(value: &str, len: usize) -> String {
     value.chars().take(len).collect()
 }
+pub fn contact_matches(c: &Value, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    if query.is_empty() {
+        return true;
+    }
+    let identity = format!(
+        "{} {} {} {} {} {}",
+        strv(c, "name"),
+        strv(c, "company"),
+        strv(c, "role"),
+        strv(c, "stage"),
+        strv(c, "notes"),
+        strv(c, "source")
+    )
+    .to_lowercase();
+    let digits = query
+        .chars()
+        .filter(char::is_ascii_digit)
+        .collect::<String>();
+    let phone_only = query
+        .chars()
+        .all(|ch| ch.is_ascii_digit() || "+()- .".contains(ch));
+    if phone_only && digits.len() >= 3 {
+        return strv(c, "phone").contains(&digits) || identity.contains(&query);
+    }
+    query.split_whitespace().all(|term| identity.contains(term))
+}
 #[derive(Clone)]
 pub struct Api {
     pub base: String,
@@ -154,6 +181,7 @@ pub enum Hit {
     Field(usize, Rect, usize),
     Menu(usize),
     Composer(Rect, usize),
+    Search(Rect, usize),
     Transcript,
     List,
 }
@@ -178,6 +206,10 @@ pub struct App {
     pub chat_scroll: usize,
     pub thread_scroll: usize,
     pub search: String,
+    pub search_editor: Editor,
+    pub search_focus: bool,
+    pub contact_filter: String,
+    pub detail_tab: usize,
     pub settings_row: usize,
     pub quit: bool,
     pub last_refresh: Instant,
@@ -205,6 +237,10 @@ impl App {
             chat_scroll: 0,
             thread_scroll: 0,
             search: String::new(),
+            search_editor: Editor::default(),
+            search_focus: false,
+            contact_filter: "all".into(),
+            detail_tab: 0,
             settings_row: 0,
             quit: false,
             last_refresh: Instant::now(),
@@ -302,7 +338,13 @@ impl App {
             return;
         }
         match self.api.get("/api/state") {
-            Ok(v) => self.state = v,
+            Ok(v) => {
+                self.state = v;
+                let rows = self.contacts();
+                if let Some(index) = rows.iter().position(|c| strv(c, "id") == self.selected_id) {
+                    self.row = index;
+                }
+            }
             Err(e) => self.notice = e,
         };
         self.last_refresh = Instant::now();
@@ -313,9 +355,13 @@ impl App {
         if !rows.is_empty() {
             self.row = self.row.min(rows.len() - 1);
             let id = strv(&rows[self.row], "id");
-            if let Ok(v) = self.api.get(&format!("/api/contact/{id}")) {
-                self.selected_id = id.into();
-                self.detail = v;
+            if self.selected_id != id {
+                self.detail = Value::Null;
+            }
+            self.selected_id = id.into();
+            match self.api.get(&format!("/api/contact/{id}")) {
+                Ok(v) => self.detail = v,
+                Err(error) => self.notice = error,
             }
         } else {
             self.detail = Value::Null;
@@ -329,15 +375,13 @@ impl App {
                 let scoped = self.page != 1
                     || (num(c, "active") == 1
                         && strv(c, "sender") == strv(&self.state["whatsapp"], "phone"));
-                let hay = format!(
-                    "{} {} {} {}",
-                    strv(c, "name"),
-                    strv(c, "company"),
-                    strv(c, "phone"),
-                    strv(c, "stage")
-                )
-                .to_lowercase();
-                scoped && (self.search.is_empty() || hay.contains(&self.search.to_lowercase()))
+                let source = match self.contact_filter.as_str() {
+                    "enabled" => num(c, "active") == 1,
+                    "whatsapp" => c["whatsapp_known"].as_bool().unwrap_or(false),
+                    "saved" => strv(c, "source") != "WhatsApp contacts",
+                    _ => true,
+                };
+                scoped && source && contact_matches(c, &self.search)
             })
             .collect();
         rows.sort_by_cached_key(|c| (strv(c, "name").to_lowercase(), strv(c, "phone").to_owned()));
@@ -350,9 +394,29 @@ impl App {
         self.page = index;
         self.row = 0;
         self.search.clear();
+        self.search_editor = Editor::default();
+        self.search_focus = false;
+        self.contact_filter = "all".into();
+        self.detail_tab = if index == 1 { 1 } else { 0 };
         self.composer_focus = false;
         self.thread_scroll = 0;
         self.refresh_detail();
+    }
+    pub fn update_search(&mut self) {
+        self.search = self.search_editor.text();
+        self.row = 0;
+        self.thread_scroll = 0;
+        let rows = self.contacts();
+        let next = rows.first().map(|c| strv(c, "id")).unwrap_or("");
+        if next != self.selected_id {
+            self.refresh_detail();
+        }
+    }
+    pub fn focus_search(&mut self) {
+        if matches!(self.page, 1 | 2) {
+            self.search_focus = true;
+            self.composer_focus = false;
+        }
     }
     pub fn select(&mut self, index: usize) {
         self.row = index;
@@ -668,7 +732,11 @@ impl App {
             "unlink"=>self.confirm("Unlink WhatsApp?","Remove the local pairing and deactivate all contacts. You can also remove Oracle Leads from Linked devices on your phone.".into(),Action::new("request",json!({"path":"/api/whatsapp/unlink","body":{},"notice":"WhatsApp unlinked."}))),
             "import"=>self.form("Import contacts","CSV columns: name,phone,company,role,source,notes. Numbers need +country code. JSON arrays are also supported.","import",Value::Null,vec![Field::new("Local file path","",false)]),
             "legacy"=>self.confirm("Import Bismyth saved contacts?","Read contacts from your older Bismyth Leads runs. Originals stay unchanged. All imported contacts start inactive.".into(),Action::new("request",json!({"path":"/api/import-legacy","body":{},"notice":"Older contacts imported.","next":"import"}))),
-            "search"=>self.form("Find a relationship","Search by name, company, number or stage.","search",Value::Null,vec![Field::new("Search",&self.search,false)]),
+            "search"=>self.focus_search(),
+            "refresh-contacts"=>self.request("/api/contacts/refresh",json!({}),"Available WhatsApp contact updates checked. Import a CSV for missing contacts.",""),
+            "clear-search"=>{self.search_editor=Editor::default();self.contact_filter="all".into();self.update_search();},
+            "filter"=>{self.contact_filter=action.data.as_str().unwrap_or("all").into();self.row=0;self.refresh_detail();},
+            "detail-tab"=>{self.search_focus=false;self.detail_tab=action.data.as_u64().unwrap_or(0)as usize;self.thread_scroll=0;},
             "export"|"backup"=>{let backup=action.name=="backup";let home=std::env::var("HOME").unwrap_or(".".into());self.form(if backup{"Export relationship backup"}else{"Export contacts"},"Saved privately on this computer. Backups exclude WhatsApp credentials.","export",json!(backup),vec![Field::new("Save path",&format!("{home}/{}",if backup{"oracle-leads-backup.json"}else{"bismyth-leads-contacts.csv"}),false)]);},
             "restore"=>self.form("Restore permanent memory","Restore into an empty workspace. All restored contacts are inactive; WhatsApp credentials are not imported.","restore",Value::Null,vec![Field::new("Backup JSON path","",false)]),
             "restore-confirm"=>self.confirm("Restore this relationship backup?",action.data.as_str().unwrap_or("").into(),Action::new("request",json!({"path":"/api/restore","body":{"path":action.data},"notice":"Memory restored. Contacts are inactive."}))),
@@ -898,5 +966,35 @@ pub fn expand(path: &str) -> String {
         format!("{}/{}", std::env::var("HOME").unwrap_or(".".into()), rest)
     } else {
         path.into()
+    }
+}
+
+#[cfg(test)]
+mod directory_tests {
+    use super::*;
+    #[test]
+    fn live_search_accepts_names_cross_field_terms_and_formatted_phone_numbers() {
+        let c = json!({"name":"Asha Kapoor","phone":"+919876543210","company":"North Homes","role":"Owner","stage":"interested","notes":"Tuesday demo"});
+        for query in [
+            "",
+            "ASHA",
+            "asha homes",
+            "owner",
+            "Tuesday",
+            "+91 (987) 654-3210",
+            "987654",
+            "interested",
+        ] {
+            assert!(contact_matches(&c, query), "{query}");
+        }
+        for query in ["Other person", "001199", "missing company"] {
+            assert!(!contact_matches(&c, query), "{query}");
+        }
+    }
+    #[test]
+    fn a_short_number_in_a_name_does_not_match_every_phone_prefix() {
+        let c = json!({"name":"Fixture 39","phone":"+12025550039"});
+        assert!(contact_matches(&c, "fixture 39"));
+        assert!(!contact_matches(&c, "fixture 02"));
     }
 }

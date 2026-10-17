@@ -30,6 +30,8 @@ export class WhatsApp {
     this.pairingReady = false;
     this.pairingAttempt = null;
     this.generation = 0;
+    this.directorySyncing=null;
+    this.patchNames=[];
     this.onMessage = onMessage;
     this.socket = null;
     this.connecting = false;
@@ -61,11 +63,13 @@ export class WhatsApp {
           DisconnectReason,
           jidDecode,
           Browsers,
+          ALL_WA_PATCH_NAMES,
         },
         { default: pino },
         { default: QRCode },
       ] = await this.loadModules();
       if (generation !== this.generation) return this.status();
+      this.patchNames=ALL_WA_PATCH_NAMES || [];
       const get = (key) => {
         const row = this.store.one("SELECT value FROM auth WHERE key=?", key);
         return row ? JSON.parse(row.value, BufferJSON.reviver) : null;
@@ -128,10 +132,39 @@ export class WhatsApp {
         browser: Browsers.ubuntu("Chrome"),
       });
       this.socket = sock;
+      const pendingContacts=[];
+      const unresolvedContacts=new Map();
+      const receiveContacts=async (records)=>{
+        if(this.socket!==sock || !Array.isArray(records))return;
+        if(this.state.status!=="connected"){
+          for(const contact of records)pendingContacts.push(contact);return;
+        }
+        const rows=[];
+        for(const contact of records){
+          if(!contact || typeof contact.id!=="string")continue;
+          const number=await phoneForKey({remoteJid:contact.id,remoteJidAlt:typeof contact.phoneNumber==="string"?contact.phoneNumber:undefined},jid=>sock.signalRepository?.lidMapping?.getPNForLID(jid));
+          if(!number){if(contact.id.endsWith("@lid"))unresolvedContacts.set(contact.id,contact);continue;}
+          unresolvedContacts.delete(contact.id);
+          if(number===this.state.phone)continue;
+          const name=[contact.name,contact.notify,contact.verifiedName].find(value=>typeof value==="string" && value.trim()) || number;
+          rows.push({phone:number,name:name.slice(0,200)});
+        }
+        if(this.socket!==sock || this.state.status!=="connected")return;
+        if(rows.length){this.store.syncContactDirectory(rows);this.state.directory_status="ready";this.state.directory_error=null;}
+      };
+      for(const event of ["contacts.upsert","contacts.update"]){sock.ev.on(event,records=>{
+        void receiveContacts(records).catch(()=>{if(this.socket===sock)this.state.directory_error="Some contact metadata could not be loaded. Reconnect or import a CSV.";});
+      });}
+      sock.ev.on("lid-mapping.update",mapping=>{
+        if(this.socket!==sock || typeof mapping?.lid!=="string" || typeof mapping?.pn!=="string")return;
+        const contact=unresolvedContacts.get(mapping.lid);
+        if(contact)void receiveContacts([{...contact,phoneNumber:mapping.pn}]).catch(()=>{});
+      });
       sock.ev.on("creds.update", (update) => {
         if (this.socket !== sock) return;
         Object.assign(creds, update);
         put("creds", creds);
+        if(update.myAppStateKeyId && this.state.status==="connected" && !this.directorySyncing)void this.refreshContacts().catch(()=>{});
       });
       sock.ev.on("connection.update", (update) => {
         if (this.socket !== sock) return;
@@ -160,6 +193,9 @@ export class WhatsApp {
           delete creds.pairingCode;
           put("creds", creds);
           this.store.bindSender(this.state.phone);
+          if(creds.myAppStateKeyId)void this.refreshContacts().catch(()=>{});
+          else this.state.directory_status="waiting_for_keys";
+          if(pendingContacts.length)void receiveContacts(pendingContacts.splice(0)).catch(()=>{if(this.socket===sock)this.state.directory_error="Contact metadata could not be loaded. Reconnect or import a CSV.";});
           this.store.activity(
             "whatsapp_connected",
             `Paired account ${this.state.phone} connected.`,
@@ -168,6 +204,7 @@ export class WhatsApp {
         if (update.connection === "close") {
           const code = update.lastDisconnect?.error?.output?.statusCode;
           this.socket = null;
+          this.directorySyncing=null;
           this.pairingReady = false;
           this.connecting = false;
           this.state = {
@@ -300,6 +337,24 @@ export class WhatsApp {
       if (generation === this.generation) this.connecting = false;
     }
   }
+  async refreshContacts() {
+    const sock=this.socket;
+    if(!sock || this.state.status!=="connected")throw new Error("Connect WhatsApp before refreshing its contacts.");
+    if(this.directorySyncing)throw new Error("WhatsApp contact updates are already being checked.");
+    if(typeof sock.resyncAppState!=="function" || !this.patchNames.length)throw new Error("Contact sync is unavailable in this WhatsApp session.");
+    const attempt=Symbol("directory");this.directorySyncing=attempt;
+    this.state.directory_status="syncing";this.state.directory_error=null;
+    let timer;
+    try{
+      await Promise.race([sock.resyncAppState(this.patchNames,false),new Promise((_,reject)=>{timer=setTimeout(()=>reject(new Error("Contact sync timed out.")),20000);})]);
+      if(this.socket!==sock) return {ok:false};
+      this.state.directory_status="ready";
+      return {ok:true};
+    }catch{
+      if(this.socket===sock){this.state.directory_status="error";this.state.directory_error="WhatsApp contacts could not be refreshed. Keep your phone online and retry, or import a CSV.";}
+      throw new Error("WhatsApp contacts could not be refreshed. Keep your phone online and retry, or import a CSV.");
+    }finally{clearTimeout(timer);if(this.directorySyncing===attempt)this.directorySyncing=null;}
+  }
   async pairPhone(value) {
     const digits = pairingPhone(value);
     const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
@@ -367,6 +422,7 @@ export class WhatsApp {
   }
   disconnect() {
     this.generation++;
+    this.directorySyncing=null;
     this.pairingAttempt = null;
     this.pairingReady = false;
     clearTimeout(this.timer);
@@ -378,6 +434,7 @@ export class WhatsApp {
   }
   async unlink() {
     this.generation++;
+    this.directorySyncing=null;
     this.pairingAttempt = null;
     this.pairingReady = false;
     const sock = this.socket;

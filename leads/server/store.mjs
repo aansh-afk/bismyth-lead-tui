@@ -267,11 +267,30 @@ export class Store {
       this.db.exec("ROLLBACK");
       throw error;
     }
-    this.activity(
+    if(added || errors.length) this.activity(
       "contacts_imported",
       `${added} contacts imported; ${duplicates} duplicates; ${errors.length} invalid. All new contacts are inactive.`,
     );
     return { added, duplicates, errors };
+  }
+  syncContactDirectory(rows) {
+    rows=rows.filter(row=>!this.get(`directory_deleted:${row.phone}`));
+    const known=new Set(this.get("directory_whatsapp_phones") || []);
+    let added=0,updated=0;
+    for(let start=0;start<rows.length;start+=10000){
+      const batch=rows.slice(start,start+10000).map(row=>({phone:row.phone,name:row.name,source:"WhatsApp contacts"}));
+      added+=this.importContacts(batch).added;
+      for(const row of batch){
+        const number=phone(row.phone);known.add(number);
+        const existing=this.one("SELECT id,name FROM contacts WHERE phone=?",number);
+        if(existing && existing.name===number && typeof row.name==="string" && row.name.trim() && row.name!==number){
+          this.run("UPDATE contacts SET name=?,updated_at=? WHERE id=?",text(row.name.slice(0,200),200),now(),existing.id);updated++;
+        }
+      }
+    }
+    this.set("directory_whatsapp_phones",[...known]);
+    this.set("directory_whatsapp_sync",{at:now(),added,updated,known:known.size});
+    return {added,updated};
   }
   patchContact(contactId, input, sender) {
     const c = this.contact(contactId),
@@ -515,11 +534,13 @@ export class Store {
   }
   state() {
     const contacts = this.all(
-        "SELECT * FROM contacts ORDER BY updated_at DESC LIMIT 10000",
+        "SELECT * FROM contacts ORDER BY updated_at DESC",
       ),
       count = (sql) => Number(this.one(sql).n);
+    const whatsappKnown=new Set(this.get("directory_whatsapp_phones") || []);
     return {
-      contacts,
+      contacts:contacts.map(c=>({...c,whatsapp_known:whatsappKnown.has(c.phone)||c.source==="WhatsApp contacts"})),
+      directory:{legacy:this.get("directory_legacy") || null,whatsapp:this.get("directory_whatsapp_sync") || null},
       settings: this.settings(),
       analytics: {
         contacts: count("SELECT COUNT(*) n FROM contacts"),

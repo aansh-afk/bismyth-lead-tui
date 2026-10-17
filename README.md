@@ -57,7 +57,15 @@ Account changes deactivate the old contact scope. A manual reply from the phone 
 
 ### 3 — Contacts
 
-**I** imports a CSV or JSON file, **L** imports contacts from the original Bismyth Leads saved runs, **E** exports CSV/JSON, **/** searches, and Enter opens a relationship. Existing Bismyth files and Oracle model settings are never migrated destructively.
+Your searchable directory combines saved Bismyth/Oracle leads with the contact metadata your linked WhatsApp account shares. Existing saved Bismyth phone contacts are loaded once into the default workspace; original saved runs remain unchanged. Separate `--data-dir` workspaces use explicit Import / Older runs. Later saved runs can be loaded with **Older runs**.
+
+Click the visible search field or press **/** / **Ctrl+F**. Results and the selected preview update as you type; search names, company, role, notes, stage, or a phone number with normal spaces/brackets. **All**, **Enabled**, **WhatsApp** and **Saved** filters show the relevant source/access list. **Clear** restores the full list. Search text consumes normal typing, including page numbers and shortcut letters. Enter, Down, Tab or Escape leaves the search field.
+
+Click a contact or use arrow keys to preview them. **Home/End** and **Page Up/Down** navigate long lists. The preview remains available at 80×24; **Overview**, **Chat** and **Memory** tabs show relationship context, saved conversation and permanent notes. The selected contact stays selected when data refreshes or their name moves in the list. **Actions** opens editing, meeting and consent controls; **Write** and **Drafts** remain visible.
+
+WhatsApp metadata is synchronized separately from message history, after linked-device keys are ready. **Refresh WhatsApp** checks available contact-state updates. WhatsApp may not provide the entire phone address book or a usable phone identity for every contact; import a CSV/JSON file for missing numbers. Groups, broadcasts, the sender’s own entry and unresolved LIDs are excluded. Showing a person does not monitor their messages. Every newly listed contact starts inactive without consent; existing opt-outs and operator names remain authoritative. Explicit deletion suppresses automatic WhatsApp rediscovery.
+
+**I** imports CSV/JSON, **L** loads older runs, and **E** exports contacts. Existing files and Oracle model settings remain in place.
 
 CSV columns:
 
@@ -111,13 +119,14 @@ Interrupted generation is cancelled. Interrupted sends become **uncertain**; the
 npm test
 # Optional terminal QA dependencies, preferably in a venv:
 pip install -r leads/tests/requirements-qa.txt
+python3 leads/tests/directory_smoke.py
 python3 leads/tests/pairing_smoke.py
 python3 leads/tests/native_smoke.py
 python3 leads/tests/terminal_smoke.py # compatibility UI
 python3 leads/tests/installed_smoke.py
 ```
 
-The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [phone pairing verification](leads/docs/verification-phone-pairing-2026-10-17.md), [native interface verification](leads/docs/verification-native-2026-10-17.md) and [the service verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
+The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [contacts verification](leads/docs/verification-directory-2026-10-17.md), [phone pairing verification](leads/docs/verification-phone-pairing-2026-10-17.md), [native interface verification](leads/docs/verification-native-2026-10-17.md) and [the service verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
 
 Voice mode, external calendar synchronization, and autonomous discovery are deferred. Baileys is an unofficial WhatsApp Web integration; QR readiness is tested separately from real account pairing and message delivery.
 
@@ -126,7 +135,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.2/bismyth-lead-tui-0.2.2.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.3/bismyth-lead-tui-0.2.3.tgz
 bismyth-leads
 ```
 
