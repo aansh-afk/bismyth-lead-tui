@@ -1,12 +1,12 @@
 # Oracle Leads status
 
-Release: **v0.5.0**. Command: **bismyth-leads**. Product name: Oracle Leads.
+Release: **v0.6.0**. Command: **bismyth-leads**. Product name: Oracle Leads.
 
 Local Laya: pinned ONNX English checkpoint, CPU worker, structured intent assessment on each new event, automatic writer fallback and Decision engine settings. The integration is advisory: the writer verifies context and remains responsible for the final response/stage. Real local evaluation: 16/26 correct, warm median 1.915 s, 1,680 MiB RSS. Real Codex corrected a confidently wrong Laya timing classification. Explicit setup: `bismyth-leads --setup-laya`. See [Laya/relogin verification](leads/docs/verification-laya-relogin-2026-10-17.md).
 
 WhatsApp recovery: expired authentication prompts relogin on any page. Phone pairing targets the previous verified number; QR linking checks the same identity. Recovery preserves contact permissions and memory. Wrong-account recovery is rejected until explicit Unlink. Temporary outages reconnect automatically; after auth recovery, press Start Agent. Quiet hours remain unchanged.
 
-Sources page: Firecrawl search, single-page scraping, bounded whole-domain crawls, saved progress and cancellation, public phone/email evidence, source-linked inactive imports, masked private key configuration, last checked account credits and backup/restore. Native navigation is 1–5. Live Firecrawl verification requires a configured key.
+Sources page: Firecrawl search, structured name/role/company/phone/email extraction, company/contact grouping, bounded batch collection and whole-domain crawls, resumable progress/cancellation, single/bulk inactive imports, complete JSON research export and confirmed source deletion preserving CRM relationships. Cached AREA/REAAK directories can be reprocessed locally without credits, association footer contacts are separated and skipped by bulk import, and AREA membership crawls prioritize profile/listing pages. Shared phones retain associated people in notes; email-only records remain available in research. Private key configuration, cached credits and backup/restore remain supported. Native navigation is 1–5. Live Firecrawl verification requires a configured key.
 
 The compiled build version appears beneath the logo, or in the status footer at compact sizes.
 

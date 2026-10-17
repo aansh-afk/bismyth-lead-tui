@@ -473,11 +473,37 @@ impl App {
                     Action::new("source-crawl-selected", Value::Null),
                 ),
                 (
-                    "Import phone contacts",
+                    "View this page’s contacts",
                     Action::new("source-contacts", Value::Null),
+                ),
+                (
+                    "Import all phones from this page",
+                    Action::new("source-import-all", json!({"page_ids":[self.detail["id"]]})),
+                ),
+                (
+                    "Delete this source",
+                    Action::new("source-delete", json!({"page_ids":[self.detail["id"]]})),
                 ),
             ],
         );
+    }
+    pub fn source_contacts_menu(&mut self, all: bool, company: &str) {
+        let page_id = strv(&self.detail, "id");
+        let rows: Vec<Value> = list(&self.state["sources"], "contacts")
+            .into_iter()
+            .filter(|c| {
+                (all || list(c, "sources")
+                    .iter()
+                    .any(|s| strv(s, "page_id") == page_id))
+                    && (company.is_empty() || strv(c, "company_key") == company)
+            })
+            .collect();
+        if rows.is_empty() {
+            self.notice =
+                "No contacts found yet. Collect saved results or crawl a company website.".into();
+            return;
+        }
+        self.owned_menu("Sourced contacts", "Name · company · phone or email. Select a record for its role, affiliation and sources. First 1,000 records; export includes all.", rows.into_iter().map(|c| (format!("{} · {} · {}",if strv(&c,"name").is_empty(){"Name not stated"}else{strv(&c,"name")},if strv(&c,"company").is_empty(){"Company not stated"}else{strv(&c,"company")},if strv(&c,"phone").is_empty(){strv(&c,"email")}else{strv(&c,"phone")}),Action::new("source-contact-detail",c))).collect());
     }
     pub fn contact(&self) -> Value {
         self.detail["contact"].clone()
@@ -526,6 +552,22 @@ impl App {
                             num(&value, "added"),
                             num(&value, "duplicates"),
                             list(&value, "errors").len()
+                        )
+                    } else if value["email_only"].is_number() {
+                        format!(
+                            "Imported {} · existing {} · no phone {} · site contacts skipped {} · invalid {}",
+                            num(&value, "added"),
+                            num(&value, "duplicates"),
+                            num(&value, "without_phone"),
+                            num(&value, "site_contacts"),
+                            list(&value, "errors").len()
+                        )
+                    } else if value["updated"].is_number() && value["unsupported"].is_number() {
+                        format!(
+                            "Reprocessed {} pages locally · {} unsupported layouts unchanged · {} research contacts",
+                            num(&value, "updated"),
+                            num(&value, "unsupported"),
+                            num(&value, "contacts")
                         )
                     } else if done.next == "provider" {
                         strv(&value, "detail").into()
@@ -865,18 +907,28 @@ impl App {
             "select-id"=>{self.page(2);if let Some(index)=self.contacts().iter().position(|c|c["id"]==action.data){self.select(index);}},
             "source-key"=>self.form("Connect Firecrawl","Enter your Firecrawl API key. Input is masked and saved privately outside exports. Blank removes the saved key.","source-key",Value::Null,vec![Field::secret("Firecrawl API key")]),
             "source-search"=>self.form("Find Atlas prospects","Search public sources. Firecrawl account credits apply; contacts remain inactive until you enable them.","source-search",Value::Null,vec![Field::new("Search query","real estate brokerage owners",false),Field::new("Location","Pune, India",false),Field::new("Country · two letters","IN",false),Field::new("Result limit · 1–100","5",false)]),
-            "source-scrape"|"source-scrape-selected"=>self.form("Inspect a website page","Fetch one page, keep its source URL and extract public phone/email evidence. Firecrawl credits apply.","source-scrape",Value::Null,vec![Field::new("Website URL",if action.name=="source-scrape-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Country calling code for local phones","91",false)]),
+            "source-scrape"|"source-scrape-selected"=>self.form("Inspect a website page","Extract names, roles, companies and public phone/email evidence from one page. Firecrawl credits apply.","source-scrape",Value::Null,vec![Field::new("Website URL",if action.name=="source-scrape-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Country calling code for local phones","91",false)]),
             "source-crawl"|"source-crawl-selected"=>self.form("Crawl a whole website","Follow pages within this website. Set a page limit; Firecrawl credits apply. Progress continues in Research runs.","source-crawl",Value::Null,vec![Field::new("Website URL",if action.name=="source-crawl-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Maximum pages · 1–100","10",false),Field::new("Country calling code for local phones","91",false)]),
             "source-actions"=>self.source_actions(),
             "source-select"=>{self.row=action.data.as_u64().unwrap_or(0)as usize;self.thread_scroll=0;self.refresh_detail();},
             "source-credits"=>self.request("/api/sources/credits",json!({}),"Firecrawl credit balance updated.",""),
-            "source-contacts"=>{let page=self.detail.clone();let rows=list(&page,"candidates");if rows.is_empty(){self.notice="No phone candidates yet. Inspect the page or crawl its contact pages.".into();}else{self.owned_menu("Phone contacts from this source","Select a number to import as an inactive relationship. The source URL is preserved.",rows.into_iter().map(|c|(format!("{}  {}",strv(&c,"phone"),clip(strv(&c,"evidence"),55)),Action::new("source-import",json!({"page_id":page["id"],"phone":c["phone"],"title":page["title"]})))).collect());}},
-            "source-import"=>self.form("Import sourced contact","This creates an inactive lead with its source URL and evidence. Existing phone records keep their stage and permissions.","source-import",action.data.clone(),vec![Field::new("Contact / business name",strv(&action.data,"title"),false),Field::new("Company",strv(&action.data,"title"),false)]),
-            "source-runs"=>self.owned_menu("Research runs","Crawls resume checking the saved job after restart. Select a run for progress or cancellation.",list(&self.state["sources"],"runs").into_iter().map(|r|(format!("{}  {}  {}/{}  {}",strv(&r,"kind"),strv(&r,"status"),num(&r,"completed"),num(&r,"page_limit"),clip(strv(&r,"target"),45)),Action::new("source-run",r))).collect()),
-            "source-run"=>{let r=action.data;let hint=format!("{} · {} / {} pages · credits {}\n{}",strv(&r,"target"),num(&r,"completed"),num(&r,"page_limit"),r["credits"],strv(&r,"error"));let mut items=vec![("Refresh crawl status",Action::new("request",json!({"path":"/api/sources/refresh","body":{},"notice":"Crawl progress checked."})))];if matches!(strv(&r,"status"),"running"|"collecting"){items.push(("Cancel this crawl",Action::new("request",json!({"path":"/api/sources/cancel","body":{"id":r["id"]},"notice":"Crawl cancellation confirmed."}))));}self.menu("Research progress",&hint,items);},
+            "source-contacts"=>self.source_contacts_menu(false,""),
+            "source-all-contacts"=>self.source_contacts_menu(true,""),
+            "source-companies"=>self.owned_menu("Companies from sources","Contacts stay linked to their stated company. Matching names on unrelated domains remain separate.",list(&self.state["sources"],"companies").into_iter().map(|c|(format!("{} · {} contacts · {}",strv(&c,"name"),num(&c,"contacts"),strv(&c,"website")),Action::new("source-company",c))).collect()),
+            "source-company"=>self.source_contacts_menu(true,strv(&action.data,"key")),
+            "source-contact-detail"=>{let c=action.data;let mut items=vec![(format!("Type: {}",strv(&c,"kind")),Action::new("source-contact-detail",c.clone())),(format!("Name: {}",strv(&c,"name")),Action::new("source-contact-detail",c.clone())),(format!("Role: {}",strv(&c,"role")),Action::new("source-contact-detail",c.clone())),(format!("Company: {}",strv(&c,"company")),Action::new("source-contact-detail",c.clone())),(format!("Phone: {}",strv(&c,"phone")),Action::new("source-contact-detail",c.clone())),(format!("Email: {}",strv(&c,"email")),Action::new("source-contact-detail",c.clone()))];if !strv(&c,"phone").is_empty(){items.push(("Import this phone contact".into(),Action::new("source-import",json!({"page_id":c["sources"][0]["page_id"],"phone":c["phone"]}))));}for source in list(&c,"sources"){items.push((format!("Source: {}",strv(&source,"url")),Action::new("source-open",source)));}if !strv(&c,"company_key").is_empty(){items.push(("See everyone at this company".into(),Action::new("source-company",json!({"key":c["company_key"]}))));}self.owned_menu("Contact & company relationship","Missing fields were not stated. A shared phone imports once with all associated people in its notes; email-only records remain in research.",items);},
+            "source-open"=>{let rows=self.source_pages();if let Some(i)=rows.iter().position(|p|p["id"]==action.data["page_id"]){self.row=i;self.thread_scroll=0;self.refresh_detail();}},
+            "source-import"=>self.confirm("Import this sourced phone?",format!("{}\n\nSave the extracted name, company, role, email and source evidence. Shared numbers become one relationship with associated people in its notes. Existing contacts keep their data and permissions.",strv(&action.data,"phone")),Action::new("request",json!({"path":"/api/sources/import","body":action.data,"notice":"Sourced contact imported. New leads are inactive."}))),
+            "source-collect"=>self.form("Collect contacts from saved results","Batch scrape discovered pages with named contact extraction. Discovered and older unnamed pages are collected. Optional refresh re-scrapes saved pages. Firecrawl credits apply.","source-collect",Value::Null,vec![Field::new("Maximum saved pages · 1–100","10",false),Field::new("Country calling code","91",false),Field::new("Refresh already scraped pages · yes/no","no",false)]),
+            "source-manage"=>self.menu("Manage sources","Research deletion preserves imported CRM relationships. Cancel running jobs before deleting.",vec![("Reprocess saved directories · no credits",Action::new("request",json!({"path":"/api/sources/reprocess","body":{"all":true},"notice":"Saved directories reprocessed locally."}))),("Import all saved phone contacts",Action::new("source-import-all",json!({"all":true}))),("Export all sourced contacts as JSON",Action::new("source-export",Value::Null)),("Delete selected source",Action::new("source-delete",json!({"page_ids":[self.detail["id"]]}))),("Delete all saved sources",Action::new("source-delete",json!({"all":true})))]),
+            "source-import-all"=>self.confirm("Import sourced phone contacts?","Save all unique phones in this selection as inactive relationships. Names, companies, roles, emails and source evidence are preserved. Shared phones import once; existing contacts remain unchanged. Records without a phone stay in research/exports. Website-wide directory contacts are skipped by bulk import.".into(),Action::new("request",json!({"path":"/api/sources/import-all","body":action.data,"notice":"Source phone import completed."}))),
+            "source-delete"=>{let selection=if action.data["all"].as_bool().unwrap_or(false){format!("ALL {} saved source pages",num(&self.state["sources"],"count"))}else{format!("{}\n{}",strv(&self.detail,"title"),strv(&self.detail,"url"))};self.confirm("Delete saved sources?",format!("Remove {selection} and extracted contact/company evidence.\n\nImported CRM contacts, conversations and memory remain saved. Run history and older backups retain historical records."),Action::new("request",json!({"path":"/api/sources/delete","body":action.data,"notice":"Sources deleted. Imported relationships preserved."})));},
+            "source-export"=>{let home=std::env::var("HOME").unwrap_or(".".into());self.form("Export sourced contacts","Includes names, companies, roles, phones, emails, company grouping and source evidence, including email-only contacts.","export",json!({"sources":true}),vec![Field::new("Save JSON path",&format!("{home}/oracle-sourced-contacts.json"),false)]);},
+            "source-runs"=>self.owned_menu("Research runs","Crawls and contact batches resume checking the saved job after restart. Select a run for progress or cancellation.",list(&self.state["sources"],"runs").into_iter().map(|r|(format!("{}  {}  {}/{}  {}",strv(&r,"kind"),strv(&r,"status"),num(&r,"completed"),num(&r,"page_limit"),clip(strv(&r,"target"),45)),Action::new("source-run",r))).collect()),
+            "source-run"=>{let r=action.data;let hint=format!("{} · {} / {} pages · credits {}\n{}",strv(&r,"target"),num(&r,"completed"),num(&r,"page_limit"),r["credits"],strv(&r,"error"));let mut items=vec![("Refresh research status",Action::new("request",json!({"path":"/api/sources/refresh","body":{},"notice":"Crawl progress checked."})))];if matches!(strv(&r,"status"),"running"|"collecting"){items.push(("Cancel this research job",Action::new("request",json!({"path":"/api/sources/cancel","body":{"id":r["id"]},"notice":"Crawl cancellation confirmed."}))));}self.menu("Research progress",&hint,items);},
             "help"=>self.modal=Some(Modal::Help),
             "request"=>self.request(strv(&action.data,"path"),action.data["body"].clone(),strv(&action.data,"notice"),strv(&action.data,"next")),
-            "export-save"=>self.save_export(strv(&action.data,"path"),action.data["backup"].as_bool().unwrap_or(false)),
+            "export-save"=>self.save_export(strv(&action.data,"path"),action.data["backup"].as_bool().unwrap_or(false),action.data["sources"].as_bool().unwrap_or(false)),
             "quit"=>self.quit=true,
             _=>{}
         }
@@ -901,11 +953,46 @@ impl App {
         self.modal = None;
         let result = (|| -> Result<(), String> {
             match kind.as_str() {
-                "source-key"=>self.request("/api/sources/key",json!({"api_key":first}),"Firecrawl key configuration saved.",""),
-                "source-search"=>{let limit=values[3].parse::<u32>().map_err(|_|"Enter a whole-number result limit.")?;self.request("/api/sources/search",json!({"query":values[0],"location":values[1],"country":values[2],"limit":limit}),"Search results saved. Select a page to inspect it.","");},
-                "source-scrape"=>self.request("/api/sources/scrape",json!({"url":values[0],"dial_code":values[1]}),"Page saved with public contact evidence.",""),
-                "source-crawl"=>{let limit=values[1].parse::<u32>().map_err(|_|"Enter a whole-number page limit.")?;self.request("/api/sources/crawl",json!({"url":values[0],"limit":limit,"dial_code":values[2]}),"Website crawl started. See Research runs for progress.","");},
-                "source-import"=>self.request("/api/sources/import",json!({"page_id":data["page_id"],"phone":data["phone"],"name":values[0],"company":values[1]}),"Sourced contact imported. New leads are inactive; duplicates keep their existing permissions.",""),
+                "source-key" => self.request(
+                    "/api/sources/key",
+                    json!({"api_key":first}),
+                    "Firecrawl key configuration saved.",
+                    "",
+                ),
+                "source-search" => {
+                    let limit = values[3]
+                        .parse::<u32>()
+                        .map_err(|_| "Enter a whole-number result limit.")?;
+                    self.request("/api/sources/search",json!({"query":values[0],"location":values[1],"country":values[2],"limit":limit}),"Search results saved. Select a page to inspect it.","");
+                }
+                "source-scrape" => self.request(
+                    "/api/sources/scrape",
+                    json!({"url":values[0],"dial_code":values[1]}),
+                    "Page saved with public contact evidence.",
+                    "",
+                ),
+                "source-crawl" => {
+                    let limit = values[1]
+                        .parse::<u32>()
+                        .map_err(|_| "Enter a whole-number page limit.")?;
+                    self.request(
+                        "/api/sources/crawl",
+                        json!({"url":values[0],"limit":limit,"dial_code":values[2]}),
+                        "Website crawl started. See Research runs for progress.",
+                        "",
+                    );
+                }
+                "source-collect" => {
+                    let limit = values[0]
+                        .parse::<u32>()
+                        .map_err(|_| "Enter a whole-number page limit.")?;
+                    self.request(
+                        "/api/sources/collect",
+                        json!({"all":true,"limit":limit,"dial_code":values[1],"refresh":values[2].eq_ignore_ascii_case("yes")}),
+                        "Contact collection started. Check Runs for progress.",
+                        "",
+                    );
+                }
                 "pair-phone" => {
                     if first.is_empty() {
                         return Err("Enter your WhatsApp number including country code.".into());
@@ -1063,10 +1150,13 @@ impl App {
                         self.confirm(
                             "Overwrite this export file?",
                             path.clone(),
-                            Action::new("export-save", json!({"path":path,"backup":backup})),
+                            Action::new(
+                                "export-save",
+                                json!({"path":path,"backup":backup,"sources":data["sources"]}),
+                            ),
                         );
                     } else {
-                        self.save_export(&path, backup);
+                        self.save_export(&path, backup, data["sources"].as_bool().unwrap_or(false));
                     }
                 }
                 "restore" => self.perform(Action::new("restore-confirm", json!(expand(&first)))),
@@ -1079,11 +1169,14 @@ impl App {
             self.notice = error;
         }
     }
-    fn save_export(&mut self, path: &str, backup: bool) {
+    fn save_export(&mut self, path: &str, backup: bool, sources: bool) {
         use std::io::Write;
         use std::os::unix::fs::OpenOptionsExt;
         let result = (|| -> Result<(), String> {
-            let content = if backup {
+            let content = if sources {
+                serde_json::to_string_pretty(&self.api.get("/api/sources/export")?)
+                    .map_err(|_| "Could not encode sourced contacts.")?
+            } else if backup {
                 serde_json::to_string_pretty(&self.api.get("/api/export")?)
                     .map_err(|_| "Could not encode backup.")?
             } else if path.ends_with(".csv") {

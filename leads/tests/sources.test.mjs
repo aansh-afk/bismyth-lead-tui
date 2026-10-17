@@ -179,7 +179,9 @@ test("whole-domain crawl persists job ID, limits pages and ignores outside-domai
   assert.equal(f.sources.state().runs[0].status, "completed");
   assert.equal(f.sources.state().count, 1);
   assert.equal(
-    f.sources.detail(f.sources.state().pages[0].id).candidates.length,
+    f.sources
+      .detail(f.sources.state().pages[0].id)
+      .candidates.filter((c) => c.phone).length,
     1,
   );
 });
@@ -400,4 +402,371 @@ test("HTTP-error pages are not reported as a successful scrape", async (t) => {
     /no usable/,
   );
   assert.equal(f.sources.state().count, 0);
+});
+
+const namedPage = (url = page.metadata.sourceURL) => ({
+  markdown:
+    "# Meridian Realty\n\nAsha Rao, Owner, Meridian Realty. Mobile +91 98765 43210. Email asha@meridian.test\n\nDev Shah, Sales, Meridian Realty. Email dev@meridian.test\n\nOffice Meridian Realty. Call +91 99887 76655",
+  links: ["https://meridian.test/"],
+  metadata: { sourceURL: url, title: "Team | Meridian Realty" },
+  json: {
+    contacts: [
+      {
+        name: "Asha Rao",
+        role: "Owner",
+        company: "Meridian Realty",
+        company_website: "https://meridian.test/",
+        phone: "+91 98765 43210",
+        email: "asha@meridian.test",
+        kind: "person",
+        evidence:
+          "Asha Rao, Owner, Meridian Realty. Mobile +91 98765 43210. Email asha@meridian.test",
+      },
+      {
+        name: "Dev Shah",
+        role: "Sales",
+        company: "Meridian Realty",
+        company_website: "https://meridian.test/",
+        phone: "",
+        email: "dev@meridian.test",
+        kind: "person",
+        evidence: "Dev Shah, Sales, Meridian Realty. Email dev@meridian.test",
+      },
+      {
+        name: "",
+        role: "",
+        company: "Meridian Realty",
+        company_website: "https://meridian.test/",
+        phone: "+91 99887 76655",
+        email: "",
+        kind: "business",
+        evidence: "Office Meridian Realty. Call +91 99887 76655",
+      },
+    ],
+  },
+});
+test("named extraction retains the actual person, employer, role and email, with no page-title guesses", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  await f.sources.start("scrape", { url: page.metadata.sourceURL });
+  const catalog = f.sources.catalog();
+  assert.equal(catalog.length, 3);
+  const owner = catalog.find((c) => c.name === "Asha Rao");
+  assert.equal(owner.company, "Meridian Realty");
+  assert.equal(owner.role, "Owner");
+  assert.equal(owner.email, "asha@meridian.test");
+  assert.equal(f.calls[0].body.formats[2].type, "json");
+  assert.equal(f.sources.state().companies.length, 1);
+  assert.equal(f.sources.state().companies[0].contacts, 3);
+  const result = f.sources.importAll({ all: true });
+  assert.equal(result.added, 2);
+  assert.equal(result.email_only, 1);
+  const c = f.store.state().contacts.find((c) => c.phone === owner.phone);
+  assert.equal(c.name, "Asha Rao");
+  assert.equal(c.company, "Meridian Realty");
+  assert.equal(c.role, "Owner");
+  assert(c.notes.includes("asha@meridian.test"));
+  assert.equal(c.active, 0);
+  assert.equal(c.consent, 0);
+  assert.equal(f.sources.importAll({ all: true }).duplicates, 2);
+});
+test("fabricated names, identifiers and evidence do not become sourced identities", async (t) => {
+  const p = namedPage();
+  p.json.contacts = [
+    { ...p.json.contacts[0], name: "Imaginary Owner" },
+    {
+      ...p.json.contacts[0],
+      phone: "+12025550999",
+      email: "invented@example.test",
+    },
+    {
+      ...p.json.contacts[0],
+      evidence: "Asha Rao call +919876543210 (this quote was invented)",
+    },
+  ];
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", { url: page.metadata.sourceURL });
+  const records = f.sources.catalog();
+  assert(records.every((c) => !c.name));
+  assert(!JSON.stringify(records).includes("Imaginary"));
+  assert(!records.some((c) => c.phone === "+12025550999"));
+  f.sources.importAll({ all: true });
+  assert(!f.store.state().contacts.some((c) => c.name === p.metadata.title));
+});
+test("identical contacts merge source provenance; company identities distinguish unrelated domains", async (t) => {
+  let p = namedPage();
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  p = namedPage("https://directory.example.test/meridian");
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  assert.equal(f.sources.catalog().length, 3);
+  assert(f.sources.catalog().every((c) => c.sources.length === 2));
+  f.sources.importAll({ all: true });
+  assert(f.store.state().contacts[0].notes.includes("directory.example.test"));
+  p = namedPage("https://unrelated.example.test/team");
+  p.json.contacts = p.json.contacts.map((c) => ({ ...c, company_website: "" }));
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  assert.equal(f.sources.state().companies.length, 2);
+});
+test("multiple named people sharing a phone import as one shared business relationship", async (t) => {
+  const p = namedPage();
+  p.markdown += "\n\nDev Shah, Sales, Meridian Realty. Call +91 98765 43210";
+  p.json.contacts[1] = {
+    ...p.json.contacts[1],
+    phone: "+919876543210",
+    email: "",
+    evidence: "Dev Shah, Sales, Meridian Realty. Call +91 98765 43210",
+  };
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  const result = f.sources.importAll({ all: true });
+  assert.equal(result.added, 2);
+  const shared = f.store
+    .state()
+    .contacts.find((c) => c.phone === "+919876543210");
+  assert.equal(shared.name, "Meridian Realty · shared number");
+  assert.equal(shared.role, "Shared contact");
+  assert(shared.notes.includes("Asha Rao"));
+  assert(shared.notes.includes("Dev Shah"));
+});
+test("bulk collection saves an exact bounded URL set and resumes paginated remote jobs without another POST", async (t) => {
+  const f = fixture(t, (url, options) =>
+    url.endsWith("/search")
+      ? {
+          success: true,
+          data: {
+            web: [
+              { url: page.metadata.sourceURL, title: "Team" },
+              { url: "https://other.example.test/team", title: "Other" },
+            ],
+          },
+        }
+      : options.method === "POST"
+        ? { success: true, id: "batch-123" }
+        : options.method === "DELETE"
+          ? { success: true }
+          : url.includes("skip=1")
+            ? {
+                status: "completed",
+                completed: 2,
+                total: 2,
+                data: [namedPage("https://other.example.test/team")],
+              }
+            : {
+                status: "completed",
+                completed: 2,
+                total: 2,
+                data: [
+                  namedPage(),
+                  namedPage("https://unselected.example.test/team"),
+                ],
+                next: "https://api.firecrawl.dev/v2/batch/scrape/batch-123?skip=1",
+              },
+  );
+  await f.sources.start("search", { query: "owners" });
+  await f.sources.start("batch", { all: true, limit: 2 });
+  assert.equal(f.calls[1].body.urls.length, 2);
+  assert.equal(f.calls[1].body.formats[2].type, "json");
+  assert.throws(() => f.sources.deletePages({ all: true }), /Cancel running/);
+  await f.sources.poll();
+  assert.equal(f.sources.state().runs[0].status, "collecting");
+  const again = new Sources(f.store, { env: {}, fetcher: f.sources.fetcher });
+  await again.poll();
+  again.close();
+  assert.equal(f.calls.filter((c) => c.options.method === "POST").length, 2);
+  assert.equal(f.sources.state().runs[0].status, "completed");
+  assert(!f.sources.state().pages.some((p) => p.url.includes("unselected")));
+  assert(f.sources.state().pages.every((p) => p.status === "scraped"));
+});
+test("source deletion removes research and derived companies, preserving imported CRM memory and inactive permissions", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  await f.sources.start("scrape", { url: page.metadata.sourceURL });
+  f.sources.importAll({ all: true });
+  const c = f.store.state().contacts[0];
+  f.store.memory(c.id, "Keep this relationship");
+  const before = f.store.detail(c.id);
+  assert.throws(
+    () => f.sources.deletePages({ page_ids: ["missing"] }),
+    /not found/,
+  );
+  assert.equal(f.sources.state().count, 1);
+  assert.equal(
+    f.sources.deletePages({ page_ids: [f.sources.state().pages[0].id] })
+      .deleted,
+    1,
+  );
+  assert.equal(f.sources.state().count, 0);
+  assert.equal(f.sources.catalog().length, 0);
+  assert.equal(f.sources.state().companies.length, 0);
+  assert.deepEqual(f.store.detail(c.id), before);
+});
+test("batch cancellation uses the batch endpoint, and collection skips already scraped pages", async (t) => {
+  const f = fixture(t, (url, options) =>
+    url.endsWith("/search")
+      ? {
+          success: true,
+          data: { web: [{ url: page.metadata.sourceURL, title: "Team" }] },
+        }
+      : options.method === "POST"
+        ? { success: true, id: "batch-cancel" }
+        : { success: true },
+  );
+  await f.sources.start("search", { query: "owners" });
+  await f.sources.start("batch", { all: true, limit: 1 });
+  await f.sources.cancel(f.sources.state().runs[0].id);
+  assert(f.calls.at(-1).url.endsWith("/batch/scrape/batch-cancel"));
+  assert.equal(f.calls.at(-1).options.method, "DELETE");
+  f.sources.savePage(
+    namedPage(),
+    { id: "local-fixture", target: page.metadata.sourceURL, dial_code: "91" },
+    true,
+  );
+  const before = f.calls.length;
+  await assert.rejects(
+    f.sources.start("batch", { all: true }),
+    /Scraped pages are skipped/,
+  );
+  assert.equal(f.calls.length, before);
+  assert.equal(f.sources.deletePages({ all: true }).deleted, 1);
+});
+
+test("malformed structured records fall back to evidence and legacy unnamed pages can be upgraded in bulk", async (t) => {
+  const f = fixture(t, () => ({ success: true, id: "upgrade-123" }));
+  f.sources.savePage(
+    {
+      ...namedPage(),
+      json: { contacts: [{}, null, { name: { malformed: true } }] },
+    },
+    { id: "old", target: page.metadata.sourceURL, dial_code: "91" },
+    true,
+  );
+  const id = f.sources.state().pages[0].id;
+  assert(f.sources.detail(id).candidates.every((c) => !c.name));
+  f.store.run(
+    "UPDATE source_pages SET candidates=? WHERE id=?",
+    JSON.stringify([
+      { phone: "+919876543210", evidence: "Call +919876543210" },
+    ]),
+    id,
+  );
+  await f.sources.start("batch", { all: true });
+  assert.equal(f.calls[0].body.urls.length, 1);
+  await f.sources.cancel(f.sources.state().runs[0].id);
+  f.sources.savePage(
+    namedPage(),
+    { id: "new", target: page.metadata.sourceURL, dial_code: "91" },
+    true,
+  );
+  await f.sources.start("batch", { all: true, refresh: true });
+  assert.equal(f.calls.at(-1).body.urls.length, 1);
+});
+
+test("a directory does not attach another company or role merely because it appears elsewhere on the page", async (t) => {
+  const p = namedPage();
+  p.markdown += "\n\nOther Company, CEO: Someone Else";
+  p.json.contacts[0] = {
+    ...p.json.contacts[0],
+    company: "Other Company",
+    role: "CEO",
+  };
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  const c = f.sources.catalog().find((c) => c.name === "Asha Rao");
+  assert.equal(c.company, "");
+  assert.equal(c.role, "");
+  assert.equal(c.phone, "+919876543210");
+});
+
+test("cached member profiles link proprietors and associates to their actual firm while excluding association footer numbers from bulk import", async (t) => {
+  const f = fixture(t);
+  const p = {
+    url: "https://areagroup.in/groupmember/synthetic-realty/",
+    markdown:
+      "# Synthetic Realty\n\n## Synthetic Realty\n\n## Maya Example\n\nProprietor\n\n- Contact9876543210/ 9988776655\n\n## Members Name\n\n- NameDev Example\n- RoleAsso member\n- Contact No :9123456789\n- Email:dev\\_example@example.test\n\n## Get in touch\nphone\n[+(91) 9000000000](tel:+91 9000000000)\nemail\n[office@example.test](mailto:office@example.test)\n\n## about us\nAREA Group",
+  };
+  f.sources.savePage(p, { id: "cached", target: p.url, dial_code: "91" }, true);
+  let rows = f.sources.catalog();
+  assert.equal(rows.filter((c) => c.name === "Maya Example").length, 2);
+  assert.equal(
+    rows.find((c) => c.name === "Dev Example").email,
+    "dev_example@example.test",
+  );
+  assert.equal(rows.filter((c) => c.kind === "site_contact").length, 1);
+  assert(
+    rows.filter((c) => c.name).every((c) => c.company === "Synthetic Realty"),
+  );
+  const imported = f.sources.importAll({ all: true });
+  assert.equal(imported.added, 3);
+  assert.equal(imported.site_contacts, 1);
+  assert(!f.store.state().contacts.some((c) => c.phone === "+919000000000"));
+  const id = f.sources.state().pages[0].id;
+  f.store.run("UPDATE source_pages SET candidates=? WHERE id=?", "[]", id);
+  const calls = f.calls.length;
+  assert.equal(f.sources.reprocess({ all: true }).updated, 1);
+  assert.equal(f.calls.length, calls);
+  assert(f.sources.catalog().some((c) => c.name === "Maya Example"));
+  assert.equal(f.store.state().contacts.length, 3);
+});
+test("firm/name-only membership listings never inherit the association phone", (t) => {
+  const f = fixture(t);
+  const p = {
+    url: "https://reaak.com/members.php",
+    markdown:
+      "## Members\nMember Name/Firm Name\nSYNTHETIC REALTY (MR. MAYA EXAMPLE)\nANOTHER FIRM (MR. DEV EXAMPLE)\n\nCall +91 90000 00000",
+  };
+  f.sources.savePage(p, { id: "cached", target: p.url, dial_code: "91" }, true);
+  const records = f.sources.catalog();
+  assert.equal(records.filter((c) => c.name).length, 2);
+  assert(records.filter((c) => c.name).every((c) => !c.phone));
+  assert.equal(f.sources.importAll({ all: true }).added, 0);
+  assert.equal(f.sources.importAll({ all: true }).without_phone, 2);
+});
+
+test("cached directory pagination keeps each firm next to its own managing director and phone", (t) => {
+  const f = fixture(t);
+  const p = {
+    url: "https://areagroup.in/our-members/page/2",
+    markdown:
+      "# Our Members\n\n## Our Members\n\n## Example Estates\nAddress\n\n## Maya Example\n\nManaging Director\n\n- Contact9876543210\n\n[View Details](https://areagroup.in/groupmember/example-estates/)\n\n## Second Estates\nAddress\n\n## Dev Example\n\nProprietor\n\n- Contact9988776655\n\n[View Details](https://areagroup.in/groupmember/second-estates/)\n\n## Get in touch\nCall +91 90000 00000",
+  };
+  f.sources.savePage(p, { id: "cached", target: p.url, dial_code: "91" }, true);
+  const rows = f.sources.catalog().filter((c) => c.name);
+  assert.equal(rows.length, 2);
+  assert.equal(
+    rows.find((c) => c.phone === "+919876543210").company,
+    "Example Estates",
+  );
+  assert.equal(
+    rows.find((c) => c.phone === "+919988776655").name,
+    "Dev Example",
+  );
+  assert.equal(rows[0].role, "Managing Director");
+  assert(rows[0].profile_url.includes("/groupmember/"));
+});
+
+test("AREA membership crawls prioritize member profiles and pagination over events", async (t) => {
+  const f = fixture(t, () => ({ success: true, id: "members-only" }));
+  await f.sources.start("crawl", {
+    url: "https://areagroup.in/our-members/",
+    limit: 100,
+  });
+  assert.deepEqual(f.calls[0].body.includePaths, [
+    "/groupmember/.*",
+    "/our-members(/.*)?",
+  ]);
+});
+
+test("the same named phone on multiple pages merges missing/present emails while preserving all source evidence", async (t) => {
+  let p = namedPage();
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  p = namedPage("https://broker.example.test/team");
+  p.json.contacts[0].email = "";
+  await f.sources.start("scrape", { url: p.metadata.sourceURL });
+  const owner = f.sources
+    .catalog()
+    .filter((c) => c.name === "Asha Rao" && c.phone);
+  assert.equal(owner.length, 1);
+  assert.deepEqual(owner[0].emails, ["asha@meridian.test"]);
+  assert.equal(owner[0].sources.length, 2);
+  assert.equal(owner[0].role, "Owner");
 });

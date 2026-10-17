@@ -1084,7 +1084,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
 }
 fn sources(f: &mut Frame, app: &mut App, area: Rect) {
     let parts = Layout::vertical([
-        Constraint::Length(5),
+        Constraint::Length(if area.width < 110 { 7 } else { 5 }),
         Constraint::Min(5),
         Constraint::Length(2),
     ])
@@ -1096,6 +1096,10 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         ("Search web", "source-search"),
         ("Scrape URL", "source-scrape"),
         ("Crawl site", "source-crawl"),
+        ("Collect", "source-collect"),
+        ("Contacts", "source-all-contacts"),
+        ("Companies", "source-companies"),
+        ("Manage", "source-manage"),
         ("Configure", "source-key"),
         ("Runs", "source-runs"),
         ("Credits", "source-credits"),
@@ -1110,13 +1114,14 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         f,
         rect(parts[0].x, parts[0].bottom() - 1, parts[0].width, 1),
         format!(
-            "Firecrawl {} · {} sources · last credits {}{}",
+            "Firecrawl {} · {} sources · {} contacts · last credits {}{}",
             if info["configured"].as_bool().unwrap_or(false) {
                 "configured"
             } else {
                 "needs API key"
             },
             num(&info, "count"),
+            num(&info, "contact_count"),
             info["balance"]["remaining"]
                 .as_i64()
                 .map(|n| n.to_string())
@@ -1178,7 +1183,7 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         let candidates = list(p, "candidates");
         let emails = list(p, "emails");
         let mut content = format!(
-            "{}\n{}\n{} · {}\n\n{}\n\nPHONE CONTACTS\n",
+            "{}\n{}\n{} · {}\n\n{}\n\nCONTACTS & COMPANIES\n",
             strv(p, "title"),
             strv(p, "url"),
             strv(p, "status"),
@@ -1190,8 +1195,20 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         }
         for c in candidates {
             content.push_str(&format!(
-                "{}  {}\n",
+                "{} · {}\nCompany: {}\nPhone: {}  Email: {}\nEvidence: {}\n\n",
+                if strv(&c, "name").is_empty() {
+                    "Name not stated"
+                } else {
+                    strv(&c, "name")
+                },
+                strv(&c, "role"),
+                if strv(&c, "company").is_empty() {
+                    "Not stated"
+                } else {
+                    strv(&c, "company")
+                },
                 strv(&c, "phone"),
+                strv(&c, "email"),
                 strv(&c, "evidence")
             ));
         }
@@ -1227,7 +1244,7 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         app,
         x,
         parts[2].y,
-        "Import phones",
+        "Page contacts",
         Action::new("source-contacts", Value::Null),
         true,
     );
@@ -1507,6 +1524,8 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                     "Scrape"
                 } else if kind == "source-crawl" {
                     "Start crawl"
+                } else if kind == "source-collect" {
+                    "Collect contacts"
                 } else if kind == "source-key" {
                     "Save key"
                 } else if kind == "source-import" {

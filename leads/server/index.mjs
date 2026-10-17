@@ -121,6 +121,7 @@ export async function createApp({
             sources: sources.state(),
           });
         if (path === "/api/provider") return send(200, await model.status());
+        if (path === "/api/sources/export") return send(200,{contacts:sources.catalog()});
         if (path.startsWith("/api/source/")) return send(200,sources.detail(path.split("/").pop()));
         if (path.startsWith("/api/contact/"))
           return send(200, store.detail(path.split("/").pop()));
@@ -157,6 +158,10 @@ export async function createApp({
       if (path === "/api/sources/crawl") return send(200,await sources.start("crawl",body));
       if (path === "/api/sources/cancel") return send(200,await sources.cancel(body.id));
       if (path === "/api/sources/refresh") { await sources.poll();return send(200,{ok:true}); }
+      if (path === "/api/sources/collect") return send(200,await sources.start("batch",body));
+      if (path === "/api/sources/import-all") return send(200,sources.importAll(body));
+      if (path === "/api/sources/reprocess") return send(200,sources.reprocess(body));
+      if (path === "/api/sources/delete") return send(200,sources.deletePages(body));
       if (path === "/api/sources/import") return send(200,sources.importContact(body));
       if (path === "/api/agent/start") return send(200,agent.start());
       if (path === "/api/agent/pause") return send(200,agent.pause());

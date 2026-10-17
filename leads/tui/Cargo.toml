@@ -1,6 +1,6 @@
 [package]
 name = "oracle-leads-tui"
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 license = "MIT AND Apache-2.0"
 description = "Oracle Leads outreach terminal, using the Ratatui/Crossterm stack used by Codex"
