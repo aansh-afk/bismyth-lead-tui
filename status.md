@@ -1,8 +1,10 @@
 # Oracle Leads status
 
-Release: **v0.2.4**. Command: **bismyth-leads**. Product name: Oracle Leads.
+Release: **v0.2.5**. Command: **bismyth-leads**. Product name: Oracle Leads.
 
 The four-page terminal outreach app is the default installed command. The older browser/property-enquiry source remains in the repository and previous Git history. Its saved data is left in place; page 3 → L imports existing contacts into the new workspace without changing the originals.
+
+Search spacing: Contacts and WhatsApp now reserve a blank row above and below the live search field, separating connection/source status, search and source filters. See [spacing verification](leads/docs/verification-search-spacing-2026-10-17.md).
 
 Native interface: Ratatui + Crossterm, the terminal libraries used by Codex CLI. Mouse navigation, contact selection, scrolling, clickable actions/dialogs, field focus and cursor placement, bracketed paste, inline dashboard chat, responsive layout and keyboard controls. This dedicated outreach frontend uses the existing Codex CLI model integration; it is not the full Codex UI fork.
 

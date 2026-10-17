@@ -135,10 +135,21 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.4/bismyth-lead-tui-0.2.4.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.5/bismyth-lead-tui-0.2.5.tgz
 bismyth-leads
 ```
 
 Saved WhatsApp sessions reconnect automatically while the outreach agent stays paused. `oracle-leads` and `oracle` open the same current interface; `oracle configure-selfhost` retains endpoint configuration.
 
 The v0.1.x property-enquiry implementation remains in `src/`; its historical guide is in [docs/legacy-bismyth-leads.md](docs/legacy-bismyth-leads.md). The default launcher is the Oracle Leads outreach workspace. License notices for the retained Oracle engine are preserved in `ORACLE-LICENSE` and `UPSTREAM-NOTICE`.
+
+## What Start agent does
+
+Start agent unpauses the worker queue. An empty queue waits for incoming work; starting does not automatically create introductions for every enabled contact.
+
+1. Connect WhatsApp, then select the intended contact on Contacts and enable their scope with recorded permission.
+2. Use Actions → Generate an opening draft, or Write a message. Review the exact text in Drafts and confirm sending. Start the agent so the approved queue can run.
+3. New replies from enabled contacts are saved to their relationship. With per-contact automatic handling enabled, the model uses the conversation, permanent memory and configured prompt to prepare a reply. Review mode keeps it as a draft; Auto mode queues it for dispatch.
+4. Watch the contact conversation, drafts, activity and dashboard. Pause an individual contact for human takeover, or pause the agent to stop queue processing.
+
+Quiet hours and the daily cap delay dispatch. Opt-outs stop that relationship. Pending drafts still need explicit review, and uncertain sends require checking WhatsApp before resolving them. Starting does not automatically book meetings or schedule follow-ups.

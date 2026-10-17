@@ -4,19 +4,21 @@
      L E A D S        │
                       │    Import     Export     Find     Older runs     Refresh WhatsApp
                       │  Saved leads + WhatsApp contacts · 3 shared by WhatsApp · Listing does not enable outreach
-  WORKSPACE           │   Search name, phone, company…  /                                                                                              Clear
-                      │    All     Enabled     WhatsApp     Saved    41 results
+  WORKSPACE           │
+                      │   Search name, phone, company…  /                                                                                              Clear
   01  Dashboard       │
-      Overview & chat │  ╭ CONTACTS · 41 ────────────────────────────────────────────────────────╮ ╭ Fixture 01 ─────────────────────────────────────────────╮
-                      │  │  Name          Phone            Company       Stage        Access     │ │ +12025550001 · new                                      │
-  02  WhatsApp        │  │                                                                       │ │ Synthetic Brokerage                                     │
-      Scoped inbox    │  │› Fixture 01    +12025550001     Synthetic Bro new          enabled    │ ╰─────────────────────────────────────────────────────────╯
-                      │  │  Fixture 02    +12025550002     Synthetic Bro new          listed only│   Overview     Chat     Memory
-  03  Contacts        │  │  Fixture 03    +12025550003     Synthetic Bro new          listed only│ ╭ RELATIONSHIP MEMORY ────────────────────────────────────╮
-      People & memory │  │  Fixture 04    +12025550004     Synthetic Bro new          listed only│ │ ACCESS                                                  │
-                      │  │  Fixture 05    +12025550005     Synthetic Bro new          listed only│ │ Enabled · sender permission recorded                    │
-  04  Settings        │  │  Fixture 06    +12025550006     Synthetic Bro new          listed only│ │                                                         │
-      Agent settings  │  │  Fixture 07    +12025550007     Synthetic Bro new          listed only│ │ NEXT ACTION                                             │
+      Overview & chat │    All     Enabled     WhatsApp     Saved    41 results
+                      │
+  02  WhatsApp        │  ╭ CONTACTS · 41 ────────────────────────────────────────────────────────╮ ╭ Fixture 01 ─────────────────────────────────────────────╮
+      Scoped inbox    │  │  Name          Phone            Company       Stage        Access     │ │ +12025550001 · new                                      │
+                      │  │                                                                       │ │ Synthetic Brokerage                                     │
+  03  Contacts        │  │› Fixture 01    +12025550001     Synthetic Bro new          enabled    │ ╰─────────────────────────────────────────────────────────╯
+      People & memory │  │  Fixture 02    +12025550002     Synthetic Bro new          listed only│   Overview     Chat     Memory
+                      │  │  Fixture 03    +12025550003     Synthetic Bro new          listed only│ ╭ RELATIONSHIP MEMORY ────────────────────────────────────╮
+  04  Settings        │  │  Fixture 04    +12025550004     Synthetic Bro new          listed only│ │ ACCESS                                                  │
+      Agent settings  │  │  Fixture 05    +12025550005     Synthetic Bro new          listed only│ │ Enabled · sender permission recorded                    │
+                      │  │  Fixture 06    +12025550006     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 07    +12025550007     Synthetic Bro new          listed only│ │ NEXT ACTION                                             │
                       │  │  Fixture 08    +12025550008     Synthetic Bro new          listed only│ │ No next action recorded                                 │
                       │  │  Fixture 09    +12025550009     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 10    +12025550010     Synthetic Bro new          listed only│ │ SOURCE                                                  │
@@ -28,17 +30,15 @@
                       │  │  Fixture 16    +12025550016     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 17    +12025550017     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 18    +12025550018     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 19    +12025550019     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 20    +12025550020     Synthetic Bro new          listed only│ │                                                         │
-  MODEL               │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │                                                         │
-  Codex subscription  │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 23    +12025550023     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 24    +12025550024     Synthetic Bro new          listed only│ │                                                         │
-  WHATSAPP            │  │  Fixture 25    +12025550025     Synthetic Bro new          listed only│ │                                                         │
-  connected           │  │  Fixture 26    +12025550026     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 27    +12025550027     Synthetic Bro new          listed only│ │                                                         │
-  bismyth-leads       │  │  Fixture 28    +12025550028     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 29    +12025550029     Synthetic Bro new          listed only│ ╰─────────────────────────────────────────────────────────╯
+  MODEL               │  │  Fixture 19    +12025550019     Synthetic Bro new          listed only│ │                                                         │
+  Codex subscription  │  │  Fixture 20    +12025550020     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │                                                         │
+  WHATSAPP            │  │  Fixture 23    +12025550023     Synthetic Bro new          listed only│ │                                                         │
+  connected           │  │  Fixture 24    +12025550024     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 25    +12025550025     Synthetic Bro new          listed only│ │                                                         │
+  bismyth-leads       │  │  Fixture 26    +12025550026     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 27    +12025550027     Synthetic Bro new          listed only│ ╰─────────────────────────────────────────────────────────╯
                       │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Drafts     Actions     Generate
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Available WhatsApp contact updates checked. Import a CSV for missing contacts.
@@ -50,19 +50,21 @@
      L E A D S        │
                       │    Import     Export     Find     Older runs     Refresh WhatsApp
                       │  Saved leads + WhatsApp contacts · 3 shared by WhatsApp · Listing does not enable outreach
-  WORKSPACE           │   Fixture 39                                                                                                                   Clear
-                      │    All     Enabled     WhatsApp     Saved    1 results
+  WORKSPACE           │
+                      │   Fixture 39                                                                                                                   Clear
   01  Dashboard       │
-      Overview & chat │  ╭ CONTACTS · 1 ─────────────────────────────────────────────────────────╮ ╭ Fixture 39 ─────────────────────────────────────────────╮
-                      │  │  Name          Phone            Company       Stage        Access     │ │ +12025550039 · interested                               │
-  02  WhatsApp        │  │                                                                       │ │ Synthetic Brokerage Owner                               │
-      Scoped inbox    │  │› Fixture 39    +12025550039     Synthetic Bro interested   listed only│ ╰─────────────────────────────────────────────────────────╯
-                      │  │                                                                       │   Overview     Chat     Memory
-  03  Contacts        │  │                                                                       │ ╭ RELATIONSHIP MEMORY ────────────────────────────────────╮
-      People & memory │  │                                                                       │ │ ACCESS                                                  │
-                      │  │                                                                       │ │ Listed only · outreach is paused for this contact       │
-  04  Settings        │  │                                                                       │ │                                                         │
-      Agent settings  │  │                                                                       │ │ NEXT ACTION                                             │
+      Overview & chat │    All     Enabled     WhatsApp     Saved    1 results
+                      │
+  02  WhatsApp        │  ╭ CONTACTS · 1 ─────────────────────────────────────────────────────────╮ ╭ Fixture 39 ─────────────────────────────────────────────╮
+      Scoped inbox    │  │  Name          Phone            Company       Stage        Access     │ │ +12025550039 · interested                               │
+                      │  │                                                                       │ │ Synthetic Brokerage Owner                               │
+  03  Contacts        │  │› Fixture 39    +12025550039     Synthetic Bro interested   listed only│ ╰─────────────────────────────────────────────────────────╯
+      People & memory │  │                                                                       │   Overview     Chat     Memory
+                      │  │                                                                       │ ╭ RELATIONSHIP MEMORY ────────────────────────────────────╮
+  04  Settings        │  │                                                                       │ │ ACCESS                                                  │
+      Agent settings  │  │                                                                       │ │ Listed only · outreach is paused for this contact       │
+                      │  │                                                                       │ │                                                         │
+                      │  │                                                                       │ │ NEXT ACTION                                             │
                       │  │                                                                       │ │ Call Thursday                                           │
                       │  │                                                                       │ │                                                         │
                       │  │                                                                       │ │ NOTES                                                   │
@@ -74,8 +76,6 @@
                       │  │                                                                       │ │ PERMANENT MEMORY                                        │
                       │  │                                                                       │ │ Met at the expo                                         │
                       │  │                                                                       │ │ operator                                                │
-                      │  │                                                                       │ │                                                         │
-                      │  │                                                                       │ │                                                         │
   MODEL               │  │                                                                       │ │                                                         │
   Codex subscription  │  │                                                                       │ │                                                         │
                       │  │                                                                       │ │                                                         │
@@ -94,11 +94,11 @@
  1 Dashboard         2 WhatsApp          3 Contacts          4 Settings
 
   People & memory                                ▶ Start agent         ?
-
-
     Import     Export     Find     Older runs     Refresh WhatsApp
   Saved leads + WhatsApp contacts · 3 shared by WhatsApp · Listing does not en
+
    +1 (202) 555-0039                                                   Clear
+
     All     Enabled     WhatsApp     Saved    1 results
 
   ╭ CONTACTS · 1 ─────────────────╮ ╭ Fixture 39 ────────────────────────────╮
@@ -120,11 +120,11 @@
  1 Dashboard         2 WhatsApp          3 Contacts          4 Settings
 
   People & memory                                ▶ Start agent         ?
-
-
     Import     Export     Find     Older runs     Refresh WhatsApp
   Saved leads + WhatsApp contacts · 3 shared by WhatsApp · Listing does not en
+
    q1234 no such person                                                Clear
+
     All     Enabled     WhatsApp     Saved    0 results
 
   ╭ CONTACTS · 0 ─────────────────╮ ╭ CONTACT PREVIEW ───────────────────────╮
@@ -148,21 +148,21 @@
      L E A D S        │
                       │    Import     Export     Find     Older runs     Refresh WhatsApp
                       │  Saved leads + WhatsApp contacts · 3 shared by WhatsApp · Listing does not enable outreach
-  WORKSPACE           │   Search name, phone, company…  /                                                                                              Clear
-                      │    All     Enabled     WhatsApp     Saved    41 results
+  WORKSPACE           │
+                      │   Search name, phone, company…  /                                                                                              Clear
   01  Dashboard       │
-      Overview & chat │  ╭ CONTACTS · 41 ────────────────────────────────────────────────────────╮ ╭ Zed Fixture 01 ─────────────────────────────────────────╮
-                      │  │  Name          Phone            Company       Stage        Access     │ │ +12025550001 · new                                      │
-  02  WhatsApp        │  │                                                                       │ │ Synthetic Brokerage                                     │
-      Scoped inbox    │  │  Fixture 14    +12025550014     Synthetic Bro new          listed only│ ╰─────────────────────────────────────────────────────────╯
-                      │  │  Fixture 15    +12025550015     Synthetic Bro new          listed only│   Overview     Chat     Memory
-  03  Contacts        │  │  Fixture 16    +12025550016     Synthetic Bro new          listed only│ ╭ CONVERSATION ───────────────────────────────────────────╮
-      People & memory │  │  Fixture 17    +12025550017     Synthetic Bro new          listed only│ │ No messages in this relationship yet.                   │
-                      │  │  Fixture 18    +12025550018     Synthetic Bro new          listed only│ │                                                         │
-  04  Settings        │  │  Fixture 19    +12025550019     Synthetic Bro new          listed only│ │ Only active, permitted contacts are monitored. Start    │
-      Agent settings  │  │  Fixture 20    +12025550020     Synthetic Bro new          listed only│ │ with an exact reviewed introduction.                    │
-                      │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │                                                         │
+      Overview & chat │    All     Enabled     WhatsApp     Saved    41 results
+                      │
+  02  WhatsApp        │  ╭ CONTACTS · 41 ────────────────────────────────────────────────────────╮ ╭ Zed Fixture 01 ─────────────────────────────────────────╮
+      Scoped inbox    │  │  Name          Phone            Company       Stage        Access     │ │ +12025550001 · new                                      │
+                      │  │                                                                       │ │ Synthetic Brokerage                                     │
+  03  Contacts        │  │  Fixture 16    +12025550016     Synthetic Bro new          listed only│ ╰─────────────────────────────────────────────────────────╯
+      People & memory │  │  Fixture 17    +12025550017     Synthetic Bro new          listed only│   Overview     Chat     Memory
+                      │  │  Fixture 18    +12025550018     Synthetic Bro new          listed only│ ╭ CONVERSATION ───────────────────────────────────────────╮
+  04  Settings        │  │  Fixture 19    +12025550019     Synthetic Bro new          listed only│ │ No messages in this relationship yet.                   │
+      Agent settings  │  │  Fixture 20    +12025550020     Synthetic Bro new          listed only│ │                                                         │
+                      │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │ Only active, permitted contacts are monitored. Start    │
+                      │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │ with an exact reviewed introduction.                    │
                       │  │  Fixture 23    +12025550023     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 24    +12025550024     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 25    +12025550025     Synthetic Bro new          listed only│ │                                                         │

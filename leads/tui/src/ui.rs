@@ -329,11 +329,17 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         Action::new("help", Value::Null),
         false,
     );
+    // Compact contact pages spend their spare title rows on search separation.
+    let content_gap = if matches!(app.page, 1 | 2) && area.height < 28 {
+        1
+    } else {
+        3
+    };
     let content = rect(
         main.x,
-        main.y + 3,
+        main.y + content_gap,
         main.width,
-        main.height.saturating_sub(3),
+        main.height.saturating_sub(content_gap),
     );
     match app.page {
         0 => dashboard(f, app, content),
@@ -557,7 +563,7 @@ fn dashboard(f: &mut Frame, app: &mut App, area: Rect) {
 fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
     let whatsapp = app.page == 1;
     let s = app.state.clone();
-    let header = Layout::vertical([Constraint::Length(5), Constraint::Min(5)]).split(area);
+    let header = Layout::vertical([Constraint::Length(7), Constraint::Min(5)]).split(area);
     let mut x = header[0].x;
     if whatsapp {
         x = button(
@@ -694,7 +700,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
     );
     let search = rect(
         header[0].x,
-        header[0].y + 2,
+        header[0].y + 3,
         header[0].width.saturating_sub(10),
         1,
     );
@@ -746,7 +752,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             f,
             app,
             fx,
-            header[0].y + 3,
+            header[0].y + 5,
             name,
             Action::new("filter", json!(key)),
             app.contact_filter == key,
@@ -757,7 +763,7 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
     if fx + 15 < header[0].right() {
         label(
             f,
-            rect(fx + 1, header[0].y + 3, header[0].right() - fx - 1, 1),
+            rect(fx + 1, header[0].y + 5, header[0].right() - fx - 1, 1),
             format!("{count} results"),
             MUTED,
         );
