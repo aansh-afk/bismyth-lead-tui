@@ -1,3 +1,14 @@
+const defaultModules = () => Promise.all([
+  import("@whiskeysockets/baileys"), import("pino"), import("qrcode"),
+]);
+export function pairingPhone(value) {
+  if (typeof value !== "string" || !/^\+?[0-9 ()-]+$/.test(value.trim()))
+    throw new Error("Enter an international phone number with its country code.");
+  const digits = value.trim().replace(/[+ ()-]/g, "");
+  if (!/^[1-9]\d{7,14}$/.test(digits))
+    throw new Error("Enter 8–15 digits including the country code; omit the local leading zero.");
+  return digits;
+}
 export async function phoneForKey(key, lookup = async () => null) {
   const jid = key?.remoteJid || "";
   if (jid.endsWith("@g.us") || jid.endsWith("@broadcast")) return null;
@@ -12,8 +23,13 @@ export async function phoneForKey(key, lookup = async () => null) {
   return match ? `+${match[1]}` : null;
 }
 export class WhatsApp {
-  constructor(store, onMessage) {
+  constructor(store, onMessage, { loadModules = defaultModules, pairingTimeoutMs = 20000 } = {}) {
     this.store = store;
+    this.loadModules = loadModules;
+    this.pairingTimeoutMs = pairingTimeoutMs;
+    this.pairingReady = false;
+    this.pairingAttempt = null;
+    this.generation = 0;
     this.onMessage = onMessage;
     this.socket = null;
     this.connecting = false;
@@ -23,9 +39,17 @@ export class WhatsApp {
   status() {
     return { ...this.state };
   }
-  async connect() {
+  async connect({ qr = false } = {}) {
+    if (qr && this.state.pairing_mode === "phone" && this.state.status !== "connected") {
+      this.disconnect();
+      const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
+      if (stored && !JSON.parse(stored.value).registered) this.store.run("DELETE FROM auth");
+    }
     if (this.connecting || this.socket) return this.status();
+    clearTimeout(this.timer);
     this.connecting = true;
+    const generation = ++this.generation;
+    this.pairingReady = false;
     this.state = { status: "connecting", phone: null, qr: null, error: null };
     try {
       const [
@@ -36,14 +60,12 @@ export class WhatsApp {
           proto,
           DisconnectReason,
           jidDecode,
+          Browsers,
         },
         { default: pino },
         { default: QRCode },
-      ] = await Promise.all([
-        import("@whiskeysockets/baileys"),
-        import("pino"),
-        import("qrcode"),
-      ]);
+      ] = await this.loadModules();
+      if (generation !== this.generation) return this.status();
       const get = (key) => {
         const row = this.store.one("SELECT value FROM auth WHERE key=?", key);
         return row ? JSON.parse(row.value, BufferJSON.reviver) : null;
@@ -103,16 +125,18 @@ export class WhatsApp {
           jid.endsWith("@broadcast") ||
           (!jid.endsWith("@lid") && !scoped(jid)),
         markOnlineOnConnect: false,
-        browser: ["Oracle Leads", "Desktop", "0.2.0"],
+        browser: Browsers.ubuntu("Chrome"),
       });
       this.socket = sock;
       sock.ev.on("creds.update", (update) => {
+        if (this.socket !== sock) return;
         Object.assign(creds, update);
         put("creds", creds);
       });
       sock.ev.on("connection.update", (update) => {
         if (this.socket !== sock) return;
-        if (update.qr) {
+        if (update.connection === "connecting" || update.qr) this.pairingReady = true;
+        if (update.qr && this.state.pairing_mode !== "phone") {
           const qr = QRCode.create(update.qr);
           this.state.qr_matrix = {
             size: qr.modules.size,
@@ -133,6 +157,8 @@ export class WhatsApp {
             qr: null,
             error: null,
           };
+          delete creds.pairingCode;
+          put("creds", creds);
           this.store.bindSender(this.state.phone);
           this.store.activity(
             "whatsapp_connected",
@@ -142,6 +168,7 @@ export class WhatsApp {
         if (update.connection === "close") {
           const code = update.lastDisconnect?.error?.output?.statusCode;
           this.socket = null;
+          this.pairingReady = false;
           this.connecting = false;
           this.state = {
             status:
@@ -157,6 +184,7 @@ export class WhatsApp {
           };
           this.store.saveSettings({ automation_paused: true });
           if (
+            (creds.registered || code === DisconnectReason.restartRequired) &&
             code !== DisconnectReason.loggedOut &&
             code !== DisconnectReason.connectionReplaced
           )
@@ -258,6 +286,7 @@ export class WhatsApp {
       });
       return this.status();
     } catch {
+      if (generation !== this.generation) return this.status();
       this.socket = null;
       this.state = {
         status: "disconnected",
@@ -268,7 +297,54 @@ export class WhatsApp {
       };
       return this.status();
     } finally {
-      this.connecting = false;
+      if (generation === this.generation) this.connecting = false;
+    }
+  }
+  async pairPhone(value) {
+    const digits = pairingPhone(value);
+    const stored = this.store.one("SELECT value FROM auth WHERE key='creds'");
+    if (this.state.status === "connected" || (stored && JSON.parse(stored.value).registered))
+      throw new Error("An account is already linked. Reconnect it, or unlink before choosing a different number.");
+    if (this.pairingAttempt) throw new Error("A pairing request is already in progress.");
+    const attempt = Symbol("pairing");
+    this.pairingAttempt = attempt;
+    let sock;
+    try {
+      await this.connect();
+      if (this.pairingAttempt !== attempt) throw new Error("Pairing cancelled.");
+      this.state = { ...this.state, status: "pairing_requesting", pairing_mode: "phone", pairing_phone: `+${digits}`, pairing_code: null, qr_matrix: undefined, error: null };
+      await new Promise((resolve, reject) => {
+        const start = Date.now();
+        const check = () => {
+          if (this.pairingAttempt !== attempt || (!this.socket && !this.connecting)) return finish(new Error("Pairing connection closed. Try again."));
+          if (this.socket && this.pairingReady) return finish();
+          if (Date.now() - start >= this.pairingTimeoutMs) return finish(new Error("Pairing connection timed out. Try again."));
+        };
+        const finish = (error) => { clearInterval(timer); error ? reject(error) : resolve(); };
+        const timer = setInterval(check, 25);
+        check();
+      });
+      sock = this.socket;
+      let timer;
+      const code = await Promise.race([
+        sock.requestPairingCode(digits),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(new Error("Pairing request timed out.")), this.pairingTimeoutMs); }),
+      ]).finally(() => clearTimeout(timer));
+      if (this.socket !== sock || this.pairingAttempt !== attempt || this.state.status === "connected") return this.status();
+      if (!/^[A-Z0-9]{8}$/i.test(code)) throw new Error("Invalid pairing code response.");
+      this.state = { ...this.state, status: "pairing_code_ready", pairing_code: code };
+      return this.status();
+    } catch {
+      if (this.pairingAttempt === attempt && this.state.status !== "connected") {
+        const failedSocket=this.socket;
+        this.socket=null;
+        this.pairingReady=false;
+        failedSocket?.end(undefined);
+        this.state = { ...this.state, status: "pairing_error", pairing_code: null, error: "Could not get a pairing code. Check the number and connection, then try again or use QR." };
+      }
+      return this.status();
+    } finally {
+      if (this.pairingAttempt === attempt) this.pairingAttempt = null;
     }
   }
   async send(number, body, externalId) {
@@ -290,6 +366,9 @@ export class WhatsApp {
     return result.key.id;
   }
   disconnect() {
+    this.generation++;
+    this.pairingAttempt = null;
+    this.pairingReady = false;
     clearTimeout(this.timer);
     const sock = this.socket;
     this.socket = null;
@@ -298,6 +377,9 @@ export class WhatsApp {
     sock?.end(undefined);
   }
   async unlink() {
+    this.generation++;
+    this.pairingAttempt = null;
+    this.pairingReady = false;
     const sock = this.socket;
     this.socket = null;
     clearTimeout(this.timer);

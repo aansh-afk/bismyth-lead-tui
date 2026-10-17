@@ -662,6 +662,7 @@ impl App {
             "meetings"=>self.meetings(action.data.as_bool().unwrap_or(false)),
             "meeting"=>{let m=action.data;let mut items=vec![];for status in ["booked","successful","unsuccessful","cancelled"]{items.push((format!("Mark {status}"),Action::new("request",json!({"path":"/api/meeting/update","body":{"id":m["id"],"status":status},"notice":"Meeting outcome saved."}))));}items.push(("Delete meeting record".into(),Action::new("meeting-delete",m)));self.owned_menu("Meeting outcome","Configured outcome links are prepared only while the contact remains in scope.",items);},
             "meeting-delete"=>self.confirm("Delete meeting record?",strv(&action.data,"title").into(),Action::new("request",json!({"path":"/api/meeting/delete","body":{"id":action.data["id"]},"notice":"Meeting record deleted."}))),
+            "pair-phone"=>self.form("Link with phone number instead","Enter your WhatsApp number including country code. You will enter the displayed pairing code on your phone.","pair-phone",Value::Null,vec![Field::new("WhatsApp number · +country code",strv(&self.state["whatsapp"],"pairing_phone"),false)]),
             "connect"=>{self.modal=Some(Modal::Qr);self.request("/api/whatsapp/connect",json!({}),"WhatsApp connection requested.","");},
             "disconnect"=>self.request("/api/whatsapp/disconnect",json!({}),"WhatsApp disconnected. Agent paused.",""),
             "unlink"=>self.confirm("Unlink WhatsApp?","Remove the local pairing and deactivate all contacts. You can also remove Oracle Leads from Linked devices on your phone.".into(),Action::new("request",json!({"path":"/api/whatsapp/unlink","body":{},"notice":"WhatsApp unlinked."}))),
@@ -701,6 +702,18 @@ impl App {
         self.modal = None;
         let result = (|| -> Result<(), String> {
             match kind.as_str() {
+                "pair-phone" => {
+                    if first.is_empty() {
+                        return Err("Enter your WhatsApp number including country code.".into());
+                    }
+                    self.modal = Some(Modal::Qr);
+                    self.request(
+                        "/api/whatsapp/pair-phone",
+                        json!({"phone":first}),
+                        "Pairing request finished. Check the code or error above.",
+                        "",
+                    );
+                }
                 "search" => {
                     self.search = first;
                     self.row = 0;

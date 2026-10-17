@@ -47,6 +47,10 @@ Dashboard chat is read-only: it can explain the records but cannot send messages
 
 **C** connects the local Baileys service and displays its QR. Scan it yourself from WhatsApp → Linked devices → Link a device. The connected phone identity comes from the paired account. Use **Disconnect** or **Unlink** with explicit confirmation. The inbox lists only contacts currently active for that sender.
 
+If scanning fails, choose **Enter phone number** (or press **F** on page 2), also available as **Enter phone number instead** inside the QR dialog. Enter your WhatsApp number with its country code. Oracle shows an eight-character pairing code. On your phone, open **WhatsApp → Linked devices → Link a device → Link with phone number instead**, then enter that code. Keep the phone online; if WhatsApp rejects a code, request a fresh one or choose **Use QR**.
+
+An entered number is only a pairing target. The account becomes the verified sender after WhatsApp confirms linking. An already-linked account must be explicitly unlinked before pairing another number. Pairing never activates contacts or starts automation. Codes are visible only in the private local pairing session and are cleared on success/disconnect; they are excluded from relationship backups and activity logs.
+
 The service stores Baileys credentials/Signal keys in the private local SQLite database rather than the example multi-file auth store. It requests no full historical chat sync. Direct messages require an exact scoped number; WhatsApp LIDs require a legitimate explicit phone mapping. Groups, broadcasts, historical replay and unscoped contacts do not reach the relationship agent.
 
 Account changes deactivate the old contact scope. A manual reply from the phone pauses automatic replies for that relationship. Temporary connection loss pauses the worker. Reconnect preserves credentials; it does not silently restart sending.
@@ -107,12 +111,13 @@ Interrupted generation is cancelled. Interrupted sends become **uncertain**; the
 npm test
 # Optional terminal QA dependencies, preferably in a venv:
 pip install -r leads/tests/requirements-qa.txt
+python3 leads/tests/pairing_smoke.py
 python3 leads/tests/native_smoke.py
 python3 leads/tests/terminal_smoke.py # compatibility UI
 python3 leads/tests/installed_smoke.py
 ```
 
-The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [native interface verification](leads/docs/verification-native-2026-10-17.md) and [the service verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
+The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [phone pairing verification](leads/docs/verification-phone-pairing-2026-10-17.md), [native interface verification](leads/docs/verification-native-2026-10-17.md) and [the service verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
 
 Voice mode, external calendar synchronization, and autonomous discovery are deferred. Baileys is an unofficial WhatsApp Web integration; QR readiness is tested separately from real account pairing and message delivery.
 
@@ -121,7 +126,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.1/bismyth-lead-tui-0.2.1.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.2/bismyth-lead-tui-0.2.2.tgz
 bismyth-leads
 ```
 

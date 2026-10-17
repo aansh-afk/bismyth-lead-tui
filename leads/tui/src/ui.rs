@@ -572,6 +572,15 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
             app,
             x,
             header[0].y,
+            "Enter phone number",
+            Action::new("pair-phone", Value::Null),
+            false,
+        );
+        x = button(
+            f,
+            app,
+            x,
+            header[0].y,
             "Disconnect",
             Action::new("disconnect", Value::Null),
             false,
@@ -1148,6 +1157,8 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                 by,
                 if kind == "review" {
                     "Save draft"
+                } else if kind == "pair-phone" {
+                    "Get code"
                 } else {
                     "Save"
                 },
@@ -1253,6 +1264,34 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                     ),
                     ACCENT,
                 );
+            } else if strv(&wa, "pairing_mode") == "phone" {
+                let code = strv(&wa, "pairing_code");
+                let message = if !code.is_empty() {
+                    let formatted = if code.len() == 8 {
+                        format!("{}–{}", &code[..4], &code[4..])
+                    } else {
+                        code.to_owned()
+                    };
+                    format!(
+                        "PAIRING CODE   {formatted}\n\nOn your phone: WhatsApp → Linked devices → Link a device\n→ Link with phone number instead. Enter this code there.\n\nNumber: {}\nThis number becomes the sender only after WhatsApp confirms linking.\nIf WhatsApp rejects the code, request another code or use QR.",
+                        strv(&wa, "pairing_phone")
+                    )
+                } else if !strv(&wa, "error").is_empty() {
+                    strv(&wa, "error").to_owned()
+                } else {
+                    "Requesting a pairing code…\nKeep WhatsApp open on your phone.".into()
+                };
+                f.render_widget(
+                    Paragraph::new(message)
+                        .style(Style::default().fg(if code.is_empty() { GOLD } else { ACCENT }))
+                        .wrap(Wrap { trim: false }),
+                    rect(
+                        inner.x,
+                        inner.y + 4,
+                        inner.width,
+                        inner.height.saturating_sub(7),
+                    ),
+                );
             } else if let Some(matrix) = wa.get("qr_matrix") {
                 let size = num(matrix, "size") as usize;
                 let data = list(matrix, "data");
@@ -1321,6 +1360,28 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                     },
                     GOLD,
                 );
+            }
+            if strv(&wa, "status") != "connected" {
+                let x = button(
+                    f,
+                    app,
+                    inner.x,
+                    inner.bottom() - 2,
+                    "Enter phone number instead",
+                    Action::new("pair-phone", Value::Null),
+                    false,
+                );
+                if x + 12 < inner.right() {
+                    button(
+                        f,
+                        app,
+                        x,
+                        inner.bottom() - 2,
+                        "Use QR",
+                        Action::new("connect", Value::Null),
+                        false,
+                    );
+                }
             }
             button(
                 f,

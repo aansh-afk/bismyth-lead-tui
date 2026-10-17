@@ -1,6 +1,6 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Oracle Leads: terminal outreach and relationship workspace with scoped WhatsApp and persistent memory",
   "license": "(MIT AND Apache-2.0)",
   "repository": {
@@ -39,7 +39,8 @@
     "test:terminal": "python3 leads/tests/terminal_smoke.py",
     "test:installed": "python3 leads/tests/installed_smoke.py",
     "build:tui": "python3 leads/build_tui.py",
-    "test:native": "python3 leads/tests/native_smoke.py"
+    "test:native": "python3 leads/tests/native_smoke.py",
+    "test:pairing": "python3 leads/tests/pairing_smoke.py"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "7.0.0-rc14",

@@ -142,7 +142,9 @@ export async function createApp({
       const body = JSON.parse(raw || "{}");
       if (path === "/api/settings") return send(200, store.saveSettings(body));
       if (path === "/api/whatsapp/connect")
-        return send(200, await transport.connect());
+        return send(200, await transport.connect({ qr: true }));
+      if (path === "/api/whatsapp/pair-phone")
+        return send(200, await transport.pairPhone(body.phone));
       if (path === "/api/whatsapp/disconnect") {
         transport.disconnect();
         store.saveSettings({ automation_paused: true });

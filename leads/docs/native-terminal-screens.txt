@@ -10,9 +10,9 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 drafts  ·  0.0 min agent active
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 13:42  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
+      Scoped inbox    │  │ 13:57  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
                       │  │                                                                │ │                                                                │
-  03  Contacts        │  │ 13:42  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
+  03  Contacts        │  │ 13:57  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
       People & memory │  │                                                                │ │ promised a client.                                             │
                       │  │                                                                │ │                                                                │
   04  Settings        │  │                                                                │ │                                                                │
@@ -102,19 +102,19 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 drafts  ·  0.0 min agent active
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 13:42  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  13:42                                                     │
+      Scoped inbox    │  │ 13:57  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  13:57                                                     │
                       │  │                                                                │ │ What happened last run?                                        │
-  03  Contacts        │  │ 13:42  Fixture 01: relationship or agent access updated.       │ │                                                                │
-      People & memory │  │                                                                │ │ ORACLE  13:42                                                  │
-                      │  │ 13:42  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
+  03  Contacts        │  │ 13:57  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      People & memory │  │                                                                │ │ ORACLE  13:57                                                  │
+                      │  │ 13:57  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
   04  Settings        │  │                                                                │ │                                                                │
-      Agent settings  │  │ 13:42  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      Agent settings  │  │ 13:57  Fixture 01: relationship or agent access updated.       │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 13:42  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
+                      │  │ 13:57  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 13:42  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
+                      │  │ 13:57  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 13:42  Oracle Leads started. Outreach is paused.               │ │                                                                │
+                      │  │ 13:57  Oracle Leads started. Outreach is paused.               │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │

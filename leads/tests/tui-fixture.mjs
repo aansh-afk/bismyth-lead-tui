@@ -2,6 +2,8 @@
 import { createApp } from "../server/index.mjs";
 if (process.env.ORACLE_LEADS_FIXTURE !== "1")
   throw new Error("Explicit fixture mode required.");
+const pairingFixture=process.env.ORACLE_LEADS_PAIRING_FIXTURE==="1";
+let pairingState={status:"disconnected",phone:null,error:null};
 let app;
 app = await createApp({
   dataDir: process.env.ORACLE_LEADS_DATA,
@@ -19,13 +21,15 @@ app = await createApp({
     }),
   }),
   transportFactory: () => ({
-    status: () => ({
+    status: () => pairingFixture ? pairingState : ({
       status: "connected",
       phone: "+12025550199",
       qr: null,
       error: null,
     }),
-    disconnect() {},
+    disconnect() {pairingState={status:"disconnected",phone:null,error:null};},
+    async connect() {pairingState={status:"qr_ready",phone:null,error:null,qr_matrix:{size:1,data:[1]}};return pairingState;},
+    async pairPhone(phone) {if(!phone.includes("12025550199"))throw new Error("Synthetic number only.");pairingState={status:"pairing_code_ready",phone:null,pairing_mode:"phone",pairing_phone:"+12025550199",pairing_code:"ABCD1234"};return pairingState;},
     async send(number, text, messageId) {
       app.store.activity(
         "fixture_transport",
@@ -35,7 +39,7 @@ app = await createApp({
     },
   }),
 });
-app.store.bindSender("+12025550199");
+if(!pairingFixture) app.store.bindSender("+12025550199");
 app.store.saveSettings({ quiet_start: 0, quiet_end: 0 });
 app.server.listen(0, "127.0.0.1", () =>
   console.log(JSON.stringify({ port: app.server.address().port })),

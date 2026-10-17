@@ -395,6 +395,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Char('/') => app.perform(Action::new("search", Value::Null)),
         KeyCode::Char('c') if app.page == 0 => app.composer_focus = true,
         KeyCode::Char('c') if app.page == 1 => app.perform(Action::new("connect", Value::Null)),
+        KeyCode::Char('f') if app.page == 1 => app.perform(Action::new("pair-phone", Value::Null)),
         KeyCode::Char('m') => app.perform(Action::new("meetings", json!(false))),
         KeyCode::Char('h') => app.perform(Action::new("runs", Value::Null)),
         KeyCode::Char('i') if app.page == 2 => app.perform(Action::new("import", Value::Null)),
