@@ -1,0 +1,9 @@
+# Autonomous Oracle Leads
+
+Start Agent is the explicit action that starts automatic outreach to allowed contacts. Imported address-book rows remain separate from active contact permissions. Starting scans saved stages and message history: introduce only genuinely new relationships with no prior messages; answer the newest unanswered inbound; leave previously contacted quiet relationships alone until a new inbound. Existing clients and booked meetings retain their stage. Declines and opt-outs stop pursuit; ambiguous or repeatedly deferred interest uses nurture/low-intent states without accusations or invented intent.
+
+A 5–15 second configurable delay allows inbound bursts to settle; zero means immediate. Delays and generation retries are persisted. Inbound responses take priority over introductions. Generation and sends are serialized, stale context is cancelled, and transport-uncertain attempts never retry automatically. A persistent operation ledger is internal recovery data, not a human review inbox.
+
+Start enables autonomous sending. Pause, human takeover, sender changes, contact permissions, opt-outs, quiet hours and daily caps are checked at generation and dispatch. The existing process stays untouched while development and tests use temporary synthetic stores. The installed release begins paused on restart; the user starts actual outreach.
+
+UI: Start/Pause remain central. Replace Drafts with Activity, expose immediate/natural delay settings, show autonomous scope behavior, and keep contact-stage/manual takeover controls. Retain legacy draft APIs for compatibility without using them in the autonomous workflow. Test the planner, bursts, stage-specific context, restart recovery, no duplicate intros, stale permission/provider changes, failures, fair scheduling and native Start-to-send behavior with a fake transport.

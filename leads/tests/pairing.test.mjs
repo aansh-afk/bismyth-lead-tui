@@ -17,7 +17,7 @@ function fixture(t, options={}) {
   const socket={ev:new EventEmitter(),user:{id:"12025550199:1@s.whatsapp.net"},end(){this.ended=true;},async logout(){},async resyncAppState(names,initial){syncCalls.push({names,initial});return options.sync?options.sync():undefined;},async requestPairingCode(number){calls.push(number);return options.request?options.request(number):"ABCD1234";}};
   sockets.push(socket);return socket;
  };
- const transport=new WhatsApp(store,async()=>{}, {pairingTimeoutMs:options.timeout||200,loadModules:async()=>[
+ const transport=new WhatsApp(store,options.onMessage||(async()=>{}), {pairingTimeoutMs:options.timeout||200,reconnectDelayMs:options.reconnectDelay||5000,loadModules:async()=>[
   {default:makeSocket,ALL_WA_PATCH_NAMES:["regular","regular_low"],BufferJSON:{},initAuthCreds:()=>({registered:false}),proto:{},DisconnectReason:{loggedOut:401,connectionReplaced:440,restartRequired:515},jidDecode:id=>({user:id?.split(":")[0]}),Browsers:{ubuntu:()=>["Ubuntu","Chrome","1"]}},
   {default:()=>({})},{default:{create:()=>({modules:{size:1,data:[1]}})}}
  ]});
@@ -128,4 +128,16 @@ test("a contact whose LID mapping arrives later is listed only after a valid pho
  socket.ev.emit('contacts.upsert',[{id:'later@lid',name:'Later contact'}]);await tick();assert.equal(f.store.state().contacts.length,0);
  socket.ev.emit('lid-mapping.update',{lid:'later@lid',pn:'not-a-phone'});await tick();assert.equal(f.store.state().contacts.length,0);
  socket.ev.emit('lid-mapping.update',{lid:'later@lid',pn:'12025550104@s.whatsapp.net'});await tick();const c=f.store.state().contacts[0];assert.equal(c.name,'Later contact');assert.equal(c.phone,'+12025550104');assert.equal(c.active,0);assert.equal(c.consent,0);
+});
+test('temporary connection loss reconnects the saved sender without requiring another Start',async t=>{
+ const f=fixture(t,{reconnectDelay:5});await f.transport.connect();f.creds.me={id:'12025550199:1@s.whatsapp.net'};f.sockets[0].ev.emit('connection.update',{connection:'open'});f.store.importContacts([{phone:'+12025550101',name:'Scoped fixture'}]);const c=f.store.state().contacts[0];f.store.patchContact(c.id,{active:true,consent:true},'+12025550199');f.store.saveSettings({automation_paused:false});f.sockets[0].ev.emit('connection.update',{connection:'close',lastDisconnect:{error:{output:{statusCode:408}}}});assert.equal(f.store.settings().automation_paused,false);
+ const deadline=Date.now()+500;while(f.sockets.length<2 && Date.now()<deadline)await tick();assert.equal(f.sockets.length,2);f.sockets[1].ev.emit('connection.update',{connection:'open'});assert.equal(f.transport.status().status,'connected');assert.equal(f.store.settings().automation_paused,false);assert.equal(f.store.contact(c.id).active,1);
+});
+test('logout and account replacement still pause autonomous sending',async t=>{
+ for(const code of [401,440]){const f=fixture(t,{reconnectDelay:5});await f.transport.connect();f.creds.me={id:'12025550199:1@s.whatsapp.net'};f.sockets[0].ev.emit('connection.update',{connection:'open'});f.store.saveSettings({automation_paused:false});f.sockets[0].ev.emit('connection.update',{connection:'close',lastDisconnect:{error:{output:{statusCode:code}}}});assert.equal(f.store.settings().automation_paused,true);await tick();assert.equal(f.sockets.length,1);}
+});
+test('fresh live and reconnect-backlog events respect scope and WhatsApp second precision',async t=>{
+ const received=[];const f=fixture(t,{onMessage:e=>received.push(e)});await f.transport.connect();f.sockets[0].ev.emit('connection.update',{connection:'open'});f.store.importContacts([{phone:'+12025550101',name:'Scoped'}]);const c=f.store.state().contacts[0];f.store.patchContact(c.id,{active:true,consent:true},'+12025550199');const second=Math.floor(Date.now()/1000);f.store.run('UPDATE contacts SET activated_at=? WHERE id=?',new Date(second*1000+500).toISOString(),c.id);
+ for(const [type,id,phone,at]of [['notify','fresh','12025550101',second],['append','backlog','12025550101',second],['append','old','12025550101',second-1],['notify','unapproved','12025550102',second]]){f.sockets[0].ev.emit('messages.upsert',{type,messages:[{key:{id,remoteJid:phone+'@s.whatsapp.net'},message:{conversation:'A new message'},messageTimestamp:at}]});await tick();}
+ assert.deepEqual(received.map(e=>e.externalId),['fresh','backlog']);assert(received.every(e=>e.historical===false));
 });

@@ -151,7 +151,7 @@ fn history(f: &mut Frame, area: Rect, messages: &[Value], scroll: usize, operato
                 if operator {
                     "Ask what happened last run, who wants a meeting, or what you promised a client."
                 } else {
-                    "Only active, permitted contacts are monitored. Start with an exact reviewed introduction."
+                    "Start the agent to introduce Atlas and answer enabled contacts automatically."
                 },
                 Style::default().fg(MUTED),
             )),
@@ -439,11 +439,12 @@ fn dashboard(f: &mut Frame, app: &mut App, area: Rect) {
         f,
         regions[1],
         format!(
-            "{} sent  ·  {} replies  ·  {} drafts  ·  {:.1} min agent active",
+            "{} sent  ·  {} replies  ·  {} actions underway  ·  {:.1} min active  ·  {}",
             num(a, "sent"),
             num(a, "replies"),
-            num(a, "drafts"),
-            active / 60.0
+            num(a, "working"),
+            active / 60.0,
+            strv(&s["agent_status"], "summary")
         ),
         MUTED,
     );
@@ -665,13 +666,14 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
     }
     let source_hint = if whatsapp {
         format!(
-            "{}  {} · Only enabled scope is monitored",
+            "{}  {} · {}",
             strv(&s["whatsapp"], "status").to_uppercase(),
             if strv(&s["whatsapp"], "phone").is_empty() {
                 "No account paired"
             } else {
                 strv(&s["whatsapp"], "phone")
-            }
+            },
+            strv(&s["agent_status"], "summary")
         )
     } else {
         let known = list(&s, "contacts")
@@ -1034,11 +1036,11 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         app,
         ax,
         pieces[3].y,
-        "Drafts",
+        "Activity",
         Action::new("jobs", Value::Null),
         false,
     );
-    ax = button(
+    button(
         f,
         app,
         ax,
@@ -1047,17 +1049,6 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         Action::new("contact-actions", Value::Null),
         false,
     );
-    if ax + 13 < pieces[3].right() {
-        button(
-            f,
-            app,
-            ax,
-            pieces[3].y,
-            "Generate",
-            Action::new("generate", Value::Null),
-            false,
-        );
-    }
 }
 fn settings(f: &mut Frame, app: &mut App, area: Rect) {
     let parts = Layout::vertical([
@@ -1324,6 +1315,8 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                     "Save draft"
                 } else if kind == "pair-phone" {
                     "Get code"
+                } else if kind == "write" {
+                    "Send"
                 } else {
                     "Save"
                 },

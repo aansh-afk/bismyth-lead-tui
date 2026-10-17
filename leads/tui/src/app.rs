@@ -490,15 +490,8 @@ impl App {
                     },
                     Action::new("scope", Value::Null),
                 ),
-                (
-                    "Generate an opening draft",
-                    Action::new("generate", Value::Null),
-                ),
                 ("Write a message", Action::new("write", Value::Null)),
-                (
-                    "Review drafts and uncertain sends",
-                    Action::new("jobs", Value::Null),
-                ),
+                ("View automatic activity", Action::new("jobs", Value::Null)),
                 (
                     "Edit relationship details",
                     Action::new("edit-contact", Value::Null),
@@ -535,9 +528,20 @@ impl App {
     }
     pub fn review_jobs(&mut self) {
         self.refresh_detail();
-        let jobs = list(&self.detail, "jobs");
+        let jobs = list(&self.detail, "jobs")
+            .into_iter()
+            .filter(|j| {
+                num(j, "automatic") == 1
+                    || matches!(
+                        strv(j, "status"),
+                        "sent" | "sending" | "uncertain" | "completed"
+                    )
+            })
+            .collect::<Vec<_>>();
         if jobs.is_empty() {
-            self.notice = "No drafts or unresolved sends for this relationship.".into();
+            self.notice =
+                "No automatic activity yet. Start the agent to assess enabled relationships."
+                    .into();
             return;
         }
         let items = jobs
@@ -546,14 +550,19 @@ impl App {
                 (
                     format!(
                         "{}  {}",
-                        strv(&j, "status").to_uppercase(),
+                        match strv(&j, "status") {
+                            "queued" => "WAITING".to_owned(),
+                            "generating" => "WRITING".to_owned(),
+                            "completed" => "NO REPLY NEEDED".to_owned(),
+                            state => state.to_uppercase(),
+                        },
                         clip(strv(&j, "text"), 65)
                     ),
                     Action::new("job", j),
                 )
             })
             .collect();
-        self.owned_menu("Drafts and send operations","Opening messages always require exact review. Uncertain sends are never retried automatically.",items);
+        self.owned_menu("Automatic activity","Introductions and replies run automatically. Select an action to see its outcome and timing.",items);
     }
     pub fn meetings(&mut self, contact_only: bool) {
         let rows = list(&self.state, "meetings")
@@ -599,9 +608,17 @@ impl App {
                 "knowledge",
             ),
             (
-                "Incoming reply mode",
-                strv(s, "reply_mode").into(),
-                "reply_mode",
+                "Response timing",
+                if num(s, "reply_delay_max") == 0 {
+                    "Immediate".into()
+                } else {
+                    format!(
+                        "{}–{} seconds",
+                        num(s, "reply_delay_min"),
+                        num(s, "reply_delay_max")
+                    )
+                },
+                "delay",
             ),
             (
                 "Daily send limit",
@@ -638,19 +655,11 @@ impl App {
     pub fn setting(&mut self, key: &str) {
         match key {
             "provider" => self.provider_menu(),
-            "reply_mode" => self.menu(
-                "Incoming replies",
-                "Opening messages always require separate review.",
-                vec![
-                    (
-                        "Review each proposed reply",
-                        Action::new("settings-save", json!({"reply_mode":"review"})),
-                    ),
-                    (
-                        "Automatically reply within the active scope",
-                        Action::new("settings-save", json!({"reply_mode":"auto"})),
-                    ),
-                ],
+            "delay" => self.form(
+                "Response timing",
+                "Seconds before composing and between automatic sends. Set both to 0 for immediate action.",
+                "delay", Value::Null,
+                vec![Field::new("Minimum seconds",&num(&self.state["settings"],"reply_delay_min").to_string(),false),Field::new("Maximum seconds",&num(&self.state["settings"],"reply_delay_max").to_string(),false)],
             ),
             "quiet" => self.form(
                 "Quiet hours",
@@ -694,7 +703,7 @@ impl App {
             "page"=>self.page(action.data.as_u64().unwrap_or(0)as usize),
             "provider"=>self.provider_menu(),
             "set-provider"=>self.request("/api/settings",json!({"provider":action.data,"automation_paused":true}),"Provider selected. Outreach is paused.","provider-chosen"),
-            "toggle-agent"=>self.request("/api/settings",json!({"automation_paused":!self.state["settings"]["automation_paused"].as_bool().unwrap_or(true)}),"Agent state updated.",""),
+            "toggle-agent"=>{let paused=self.state["settings"]["automation_paused"].as_bool().unwrap_or(true);self.request(if paused {"/api/agent/start"} else {"/api/agent/pause"},json!({}),if paused {"Autonomous outreach started. Enabled relationships are assessed automatically."} else {"Agent paused."},"");},
             "verify"=>self.request("/api/provider",json!({}),"Provider check complete.","provider"),
             "settings-save"=>self.request("/api/settings",action.data,"Settings saved.",""),
             "setting"=>self.setting(action.data.as_str().unwrap_or("")),
@@ -705,10 +714,10 @@ impl App {
             "conversation"=>{if num(&c,"active")!=1{self.notice="Enable this relationship’s WhatsApp scope to open the scoped inbox.".into();}else{self.page(1);if let Some(index)=self.contacts().iter().position(|row|strv(row,"id")==cid){self.select(index);}}},
             "scope"=>{if num(&c,"active")==1{self.request("/api/contact/update",json!({"id":cid,"patch":{"active":false}}),"Contact paused.","");}else{self.confirm("Enable this contact’s WhatsApp scope?",format!("{}\n{}\n\nConfirm this person gave permission for WhatsApp outreach. Only this number will be enabled for the currently paired sender. Importing a number alone does not grant permission.",strv(&c,"name"),strv(&c,"phone")),Action::new("request",json!({"path":"/api/contact/update","body":{"id":cid,"patch":{"active":true,"consent":true}},"notice":"Contact enabled for the paired account."})));}},
             "takeover"=>self.request("/api/contact/update",json!({"id":cid,"patch":{"auto_reply":num(&c,"auto_reply")!=1}}),"Reply responsibility updated.",""),
-            "generate"=>self.request("/api/draft/generate",json!({"contact_id":cid}),"Opening draft prepared. Review it before sending.","draft-created"),
-            "write"=>self.form("Write a message",&format!("To {} · {}. This creates a draft, not a send.",strv(&c,"name"),strv(&c,"phone")),"write",json!(cid),vec![Field::new("Message","",true)]),
+            "generate"=>{self.notice="Start the agent to assess every enabled relationship and send automatically.".into();},
+            "write"=>self.form("Write a message",&format!("To {} · {}. Send uses this exact text when the agent is running; sending limits still apply.",strv(&c,"name"),strv(&c,"phone")),"write",json!(cid),vec![Field::new("Message","",true)]),
             "jobs"=>self.review_jobs(),
-            "job"=>{let j=action.data;match strv(&j,"status"){
+            "job"=>{let j=action.data;if num(&j,"automatic")==1 && strv(&j,"status")!="uncertain" {self.owned_menu("Automatic action",&format!("{} · {}\n{}\n{}",strv(&j,"kind"),strv(&j,"status"),strv(&j,"text"),strv(&j,"error")),vec![(format!("Timing: {}",strv(&j,"due_at")),Action::new("noop",Value::Null)),(format!("Generation retries: {}",num(&j,"attempts")),Action::new("noop",Value::Null))]);return;}match strv(&j,"status"){
                 "draft"|"failed"=>self.form("Review exact message",&format!("To {} · Sender {}. Saving does not send.",strv(&c,"phone"),strv(&self.state["whatsapp"],"phone")),"review",j.clone(),vec![Field::new("Message",strv(&j,"text"),true)]),
                 "uncertain"=>{let jobid=strv(&j,"id");self.menu("Resolve uncertain send","Check the actual conversation in WhatsApp first. These actions never resend.",vec![("Verified sent on WhatsApp",Action::new("request",json!({"path":"/api/draft/resolve","body":{"id":jobid,"status":"sent"},"notice":"Send manually resolved as sent."}))),("Cancel after checking WhatsApp",Action::new("request",json!({"path":"/api/draft/resolve","body":{"id":jobid,"status":"cancelled"},"notice":"Uncertain operation cancelled without retry."})))]);},
                 "queued"|"ready"=>self.confirm("Cancel queued operation?",strv(&j,"text").into(),Action::new("request",json!({"path":"/api/draft/cancel","body":{"id":j["id"]},"notice":"Queued operation cancelled."}))),
@@ -719,7 +728,7 @@ impl App {
             "memories"=>{let memories=list(&self.detail,"memories");if memories.is_empty(){self.notice="No relationship memories yet. Add one from this contact’s actions.".into();}else{self.owned_menu("Relationship memory","Original messages are retained. Operator corrections take priority over model summaries.",memories.into_iter().map(|m|(format!("{}  {}",strv(&m,"kind"),clip(strv(&m,"content"),65)),Action::new("memory-edit",m))).collect());}},
             "memory-edit"=>{let memory=action.data;let source=list(&self.detail,"messages").into_iter().find(|m|m["id"]==memory["source_id"]).map(|m|clip(strv(&m,"text"),100)).unwrap_or("Operator-authored fact".into());self.form("Inspect or correct memory",&format!("Source: {source}. Clear the field to delete this memory."),"memory-edit",memory.clone(),vec![Field::new("Memory",strv(&memory,"content"),true)]);},
             "edit-contact"=>{let fields=[("Name","name"),("Company","company"),("Role","role"),("Source","source"),("Notes","notes"),("Next action","next_action"),("Follow-up · ISO date/time","followup_at")].into_iter().map(|(label,key)|Field::new(label,strv(&c,key),false)).collect();self.form("Edit relationship","Unknown facts should stay unknown. Changes invalidate old send approvals.","contact",json!(cid),fields);},
-            "stage"=>{let stages=["new","contacted","replied","interested","meeting_requested","meeting_booked","pilot","client","not_interested"];self.owned_menu("Relationship stage","Meeting requested, booked and completed are different outcomes.",stages.into_iter().map(|stage|(stage.replace('_'," "),Action::new("request",json!({"path":"/api/contact/update","body":{"id":cid,"patch":{"stage":stage}},"notice":"Relationship stage updated."})))).collect());},
+            "stage"=>{let stages=["new","contacted","replied","interested","meeting_requested","meeting_booked","pilot","client","not_interested","nurture","low_intent"];self.owned_menu("Relationship stage","Meeting requested, booked and completed are different outcomes.",stages.into_iter().map(|stage|(stage.replace('_'," "),Action::new("request",json!({"path":"/api/contact/update","body":{"id":cid,"patch":{"stage":stage}},"notice":"Relationship stage updated."})))).collect());},
             "optout"=>self.confirm("Record an opt-out?",format!("Stop outreach to {}. This disables scope and cancels queued work.",strv(&c,"name")),Action::new("request",json!({"path":"/api/contact/update","body":{"id":cid,"patch":{"opted_out":true}},"notice":"Opt-out recorded. Outreach stopped."}))),
             "delete-contact"=>self.confirm("Delete this relationship?",format!("Delete {} and their local messages, memories, meetings and jobs. Existing backup snapshots may retain older copies.",strv(&c,"name")),Action::new("request",json!({"path":"/api/contact/delete","body":{"id":cid},"notice":"Relationship deleted."}))),
             "new-meeting"=>self.form("Create a local meeting","Include a timezone in the ISO date, e.g. 2030-01-01T10:00:00+05:30. No calendar invitation is sent.","meeting",json!(cid),vec![Field::new("Title","Atlas walkthrough",false),Field::new("Date and time · ISO format","",false)]),
@@ -730,7 +739,7 @@ impl App {
             "connect"=>{self.modal=Some(Modal::Qr);self.request("/api/whatsapp/connect",json!({}),"WhatsApp connection requested.","");},
             "disconnect"=>self.request("/api/whatsapp/disconnect",json!({}),"WhatsApp disconnected. Agent paused.",""),
             "unlink"=>self.confirm("Unlink WhatsApp?","Remove the local pairing and deactivate all contacts. You can also remove Oracle Leads from Linked devices on your phone.".into(),Action::new("request",json!({"path":"/api/whatsapp/unlink","body":{},"notice":"WhatsApp unlinked."}))),
-            "import"=>self.form("Import contacts","CSV columns: name,phone,company,role,source,notes. Numbers need +country code. JSON arrays are also supported.","import",Value::Null,vec![Field::new("Local file path","",false)]),
+            "import"=>self.form("Import contacts","CSV: name,phone,company,role,source,notes,stage. Saved stages are preserved; imports remain inactive. Numbers need +country code. JSON arrays also work.","import",Value::Null,vec![Field::new("Local file path","",false)]),
             "legacy"=>self.confirm("Import Bismyth saved contacts?","Read contacts from your older Bismyth Leads runs. Originals stay unchanged. All imported contacts start inactive.".into(),Action::new("request",json!({"path":"/api/import-legacy","body":{},"notice":"Older contacts imported.","next":"import"}))),
             "search"=>self.focus_search(),
             "refresh-contacts"=>self.request("/api/contacts/refresh",json!({}),"Available WhatsApp contact updates checked. Import a CSV for missing contacts.",""),
@@ -800,6 +809,20 @@ impl App {
                     };
                     self.request("/api/settings", json!({key:value}), "Setting saved.", "");
                 }
+                "delay" => {
+                    let min = values[0]
+                        .parse::<u32>()
+                        .map_err(|_| "Enter whole-number seconds.")?;
+                    let max = values[1]
+                        .parse::<u32>()
+                        .map_err(|_| "Enter whole-number seconds.")?;
+                    self.request(
+                        "/api/settings",
+                        json!({"reply_delay_min":min,"reply_delay_max":max}),
+                        "Response timing saved.",
+                        "",
+                    );
+                }
                 "quiet" => {
                     let start = values[0]
                         .parse::<u32>()
@@ -861,10 +884,10 @@ impl App {
                     "",
                 ),
                 "write" => self.request(
-                    "/api/draft",
+                    "/api/message",
                     json!({"contact_id":data,"text":first}),
-                    "Message saved as a draft.",
-                    "draft-created",
+                    "Message ready for automatic sending when the agent is running.",
+                    "",
                 ),
                 "review" => {
                     if send {

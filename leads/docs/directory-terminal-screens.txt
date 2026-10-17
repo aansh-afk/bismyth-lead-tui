@@ -39,7 +39,7 @@
                       │  │  Fixture 25    +12025550025     Synthetic Bro new          listed only│ │                                                         │
   bismyth-leads       │  │  Fixture 26    +12025550026     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 27    +12025550027     Synthetic Bro new          listed only│ ╰─────────────────────────────────────────────────────────╯
-                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Drafts     Actions     Generate
+                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Available WhatsApp contact updates checked. Import a CSV for missing contacts.
   1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
@@ -85,7 +85,7 @@
                       │  │                                                                       │ │                                                         │
   bismyth-leads       │  │                                                                       │ │                                                         │
                       │  │                                                                       │ ╰─────────────────────────────────────────────────────────╯
-                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Drafts     Actions     Generate
+                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Available WhatsApp contact updates checked. Import a CSV for missing contacts.
   Live search · ↑↓ select results · Enter / Esc leave search · Clear resets · Click a contact to preview
@@ -111,7 +111,7 @@
   │                               │ │ Met at the expo                        │
   │                               │ │ operator                               │
   │                               │ ╰────────────────────────────────────────╯
-  ╰───────────────────────────────╯   Write     Drafts     Actions
+  ╰───────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────
   Available WhatsApp contact updates checked. Import a CSV for missing contact
   1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q
@@ -161,8 +161,8 @@
                       │  │  Fixture 18    +12025550018     Synthetic Bro new          listed only│ ╭ CONVERSATION ───────────────────────────────────────────╮
   04  Settings        │  │  Fixture 19    +12025550019     Synthetic Bro new          listed only│ │ No messages in this relationship yet.                   │
       Agent settings  │  │  Fixture 20    +12025550020     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │ Only active, permitted contacts are monitored. Start    │
-                      │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │ with an exact reviewed introduction.                    │
+                      │  │  Fixture 21    +12025550021     Synthetic Bro new          listed only│ │ Start the agent to introduce Atlas and answer enabled   │
+                      │  │  Fixture 22    +12025550022     Synthetic Bro new          listed only│ │ contacts automatically.                                 │
                       │  │  Fixture 23    +12025550023     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 24    +12025550024     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 25    +12025550025     Synthetic Bro new          listed only│ │                                                         │
@@ -183,7 +183,7 @@
                       │  │  Fixture 40    +12025550040     Synthetic Bro new          listed only│ │                                                         │
   bismyth-leads       │  │  WhatsApp Pers +12025550200                   new          listed only│ │                                                         │
                       │  │› Zed Fixture 0 +12025550001     Synthetic Bro new          enabled    │ ╰─────────────────────────────────────────────────────────╯
-                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Drafts     Actions     Generate
+                      │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Available WhatsApp contact updates checked. Import a CSV for missing contacts.
   1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit

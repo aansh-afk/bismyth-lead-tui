@@ -21,6 +21,8 @@ export const STAGES = [
   "pilot",
   "client",
   "not_interested",
+  "nurture",
+  "low_intent",
 ];
 export function phone(value) {
   const number = String(value ?? "")
@@ -45,7 +47,9 @@ export const defaults = {
   success_link: "",
   unsuccessful_link: "",
   meeting_link: "",
-  reply_mode: "review",
+  reply_mode: "auto",
+  reply_delay_min: 5,
+  reply_delay_max: 15,
   automation_paused: true,
   quiet_start: 20,
   quiet_end: 9,
@@ -80,7 +84,14 @@ export class Store {
         this.db.exec(
           `ALTER TABLE contacts ADD COLUMN ${name} TEXT NOT NULL DEFAULT ''`,
         );
-    this.db.exec("PRAGMA user_version=2");
+    const jobColumns = new Set(this.all("PRAGMA table_info(jobs)").map(row => row.name));
+    for (const [name, declaration] of [["automatic", "INTEGER NOT NULL DEFAULT 0"], ["due_at", "TEXT NOT NULL DEFAULT ''"], ["attempts", "INTEGER NOT NULL DEFAULT 0"]])
+      if (!jobColumns.has(name)) this.db.exec(`ALTER TABLE jobs ADD COLUMN ${name} ${declaration}`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS messages_contact_time ON messages(contact_id,created_at DESC);
+      CREATE INDEX IF NOT EXISTS jobs_contact_state ON jobs(contact_id,status,created_at DESC);
+      CREATE INDEX IF NOT EXISTS jobs_due ON jobs(status,due_at,created_at);
+      CREATE INDEX IF NOT EXISTS contacts_scope ON contacts(active,consent,auto_reply,sender);`);
+    this.db.exec("PRAGMA user_version=3");
     if (!this.get("settings")) this.set("settings", defaults);
     this.db
       .prepare(
@@ -112,6 +123,7 @@ export class Store {
     this.set("settings", {
       ...defaults,
       ...this.get("settings"),
+      reply_mode: "auto",
       automation_paused: true,
     });
     this.activity("run_started", "Oracle Leads started. Outreach is paused.");
@@ -198,6 +210,8 @@ export class Store {
       ["daily_limit", 1, 500],
       ["quiet_start", 0, 23],
       ["quiet_end", 0, 23],
+      ["reply_delay_min", 0, 300],
+      ["reply_delay_max", 0, 300],
     ])
       if (key in input) {
         if (
@@ -208,6 +222,8 @@ export class Store {
           throw new Error("Invalid sending limit or quiet hours.");
         next[key] = input[key];
       }
+    if (next.reply_delay_min > next.reply_delay_max)
+      throw new Error("Minimum reply delay must not exceed the maximum.");
     const previous = this.settings();
     const changed =
       Object.keys(next).some(
@@ -245,8 +261,10 @@ export class Store {
             duplicates++;
             continue;
           }
+          const stage = String(row.stage || "new").trim().toLowerCase().replace(/[ -]+/g,"_");
+          if (!STAGES.includes(stage)) throw new Error("Unknown imported relationship stage.");
           this.run(
-            "INSERT INTO contacts(id,phone,name,company,role,source,notes,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO contacts(id,phone,name,company,role,source,notes,stage,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
             id(),
             number,
             text(row.name || number, 200),
@@ -254,6 +272,7 @@ export class Store {
             text(row.role || "", 200),
             text(row.source || row.sourceUrl || "Import", 2000),
             text(row.notes || "", 12000),
+            stage,
             now(),
             now(),
           );
@@ -416,7 +435,7 @@ export class Store {
         contactId,
       ),
       jobs: this.all(
-        "SELECT * FROM jobs WHERE contact_id=? AND status IN ('draft','ready','uncertain','failed','sending','queued','generating') ORDER BY created_at DESC LIMIT 30",
+        "SELECT * FROM jobs WHERE contact_id=? ORDER BY created_at DESC,rowid DESC LIMIT 30",
         contactId,
       ),
     };
@@ -496,14 +515,14 @@ export class Store {
     );
     return { ...m, status: input.status };
   }
-  enqueue(contactId, kind, body, sender, sourceId = null, status = "queued") {
+  enqueue(contactId, kind, body, sender, sourceId = null, status = "queued", options = {}) {
     if (!this.allowed(contactId, sender))
       throw new Error("This contact is outside the active WhatsApp scope.");
     const c = this.contact(contactId),
       s = this.settings(),
       jobId = id();
     const result = this.run(
-      "INSERT OR IGNORE INTO jobs(id,contact_id,source_id,kind,status,text,sender,scope_version,provider,revision,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+      "INSERT OR IGNORE INTO jobs(id,contact_id,source_id,kind,status,text,sender,scope_version,provider,revision,created_at,updated_at,automatic,due_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       jobId,
       contactId,
       sourceId,
@@ -516,6 +535,8 @@ export class Store {
       this.revision(),
       now(),
       now(),
+      Number(Boolean(options.automatic)),
+      options.dueAt || "",
     );
     return result.changes ? jobId : null;
   }
@@ -543,6 +564,7 @@ export class Store {
       directory:{legacy:this.get("directory_legacy") || null,whatsapp:this.get("directory_whatsapp_sync") || null},
       settings: this.settings(),
       analytics: {
+        working: count("SELECT COUNT(*) n FROM jobs WHERE automatic=1 AND status IN ('queued','generating','ready')"),
         contacts: count("SELECT COUNT(*) n FROM contacts"),
         active: count(
           "SELECT COUNT(*) n FROM contacts WHERE active=1 AND consent=1 AND opted_out=0",
@@ -717,7 +739,7 @@ export class Store {
             row.status = "interrupted";
             row.ended_at = row.heartbeat;
           }
-          if (table === "jobs" && !["sent", "uncertain"].includes(row.status))
+          if (table === "jobs" && !["sent", "completed", "uncertain"].includes(row.status))
             row.status = "cancelled";
           this.run(
             `INSERT INTO ${table}(${columns.join(",")}) VALUES(${columns.map(() => "?").join(",")})`,

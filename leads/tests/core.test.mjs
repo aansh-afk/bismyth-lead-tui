@@ -50,6 +50,7 @@ function fixture(t, options = {}) {
   const contacts = store.all("SELECT * FROM contacts ORDER BY phone");
   store.bindSender(sender);
   store.saveSettings({
+    reply_mode: "review",
     quiet_start: 0,
     quiet_end: 0,
     automation_paused: false,
@@ -666,7 +667,7 @@ test("meeting outcomes prepare the configured link once and memory corrections r
   await post("/api/meeting/update", { id: meeting.id, status: "successful" });
   await post("/api/meeting/update", { id: meeting.id, status: "successful" });
   assert.equal(app.store.all("SELECT * FROM jobs").length, 1);
-  assert.equal(app.store.one("SELECT status FROM jobs").status, "draft");
+  assert.equal(app.store.one("SELECT status FROM jobs").status, "ready");
   assert.match(
     app.store.one("SELECT text FROM jobs").text,
     /example.com\/next-step/,

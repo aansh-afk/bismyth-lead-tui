@@ -113,6 +113,7 @@ export async function createApp({
             ...store.state(),
             whatsapp: transport.status(),
             agent_busy: agent.busy,
+            agent_status: agent.status(),
           });
         if (path === "/api/provider") return send(200, await model.status());
         if (path.startsWith("/api/contact/"))
@@ -143,6 +144,8 @@ export async function createApp({
         }
       }
       const body = JSON.parse(raw || "{}");
+      if (path === "/api/agent/start") return send(200,agent.start());
+      if (path === "/api/agent/pause") return send(200,agent.pause());
       if (path === "/api/settings") return send(200, store.saveSettings(body));
       if (path === "/api/contacts/refresh") return send(200,await transport.refreshContacts());
       if (path === "/api/whatsapp/connect")
@@ -265,6 +268,11 @@ export async function createApp({
       }
       if (path === "/api/draft/generate")
         return send(200, await agent.generateOpener(body.contact_id));
+      if (path === "/api/message") {
+        const message = text(body.text,5000);
+        if (!message) throw new Error("Enter a message before sending.");
+        return send(200,{id:store.enqueue(body.contact_id,"manual",message,transport.status().phone,null,"ready")});
+      }
       if (path === "/api/draft")
         return send(200, {
           id: store.enqueue(

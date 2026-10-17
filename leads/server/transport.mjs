@@ -27,10 +27,11 @@ export async function phoneForKey(key, lookup = async () => null) {
   return match ? `+${match[1]}` : null;
 }
 export class WhatsApp {
-  constructor(store, onMessage, { loadModules = defaultModules, pairingTimeoutMs = 20000 } = {}) {
+  constructor(store, onMessage, { loadModules = defaultModules, pairingTimeoutMs = 20000, reconnectDelayMs = 5000 } = {}) {
     this.store = store;
     this.loadModules = loadModules;
     this.pairingTimeoutMs = pairingTimeoutMs;
+    this.reconnectDelayMs = reconnectDelayMs;
     this.pairingReady = false;
     this.pairingAttempt = null;
     this.generation = 0;
@@ -211,6 +212,7 @@ export class WhatsApp {
         }
         if (update.connection === "close") {
           const code = update.lastDisconnect?.error?.output?.statusCode;
+          const shouldReconnect = (linkedCredentials(creds) || code === DisconnectReason.restartRequired) && code !== DisconnectReason.loggedOut && code !== DisconnectReason.connectionReplaced;
           this.socket = null;
           this.directorySyncing=null;
           this.pairingReady = false;
@@ -225,19 +227,16 @@ export class WhatsApp {
             error:
               code === DisconnectReason.loggedOut
                 ? "Session logged out. Unlink locally before pairing again."
-                : "Connection closed. Reconnect to continue.",
+                : shouldReconnect ? "Connection lost. Reconnecting automatically." : "Connection closed. Reconnect to continue.",
           };
-          this.store.saveSettings({ automation_paused: true });
-          if (
-            (linkedCredentials(creds) || code === DisconnectReason.restartRequired) &&
-            code !== DisconnectReason.loggedOut &&
-            code !== DisconnectReason.connectionReplaced
-          )
-            this.timer = setTimeout(() => this.connect().catch(() => {}), 5000);
+          if (code === DisconnectReason.loggedOut || code === DisconnectReason.connectionReplaced)
+            this.store.saveSettings({ automation_paused: true });
+          if (shouldReconnect)
+            this.timer = setTimeout(() => this.connect().catch(() => {}), this.reconnectDelayMs);
         }
       });
       const receiveMessages = async ({ messages, type }) => {
-        if (type !== "notify" || this.state.status !== "connected") return;
+        if (!["notify","append"].includes(type) || this.state.status !== "connected") return;
         for (const m of messages) {
           if (!m.key?.id) continue;
           const number = await phoneForKey(m.key, (jid) =>
@@ -260,7 +259,7 @@ export class WhatsApp {
           if (!body) continue;
           const timestamp = new Date(Number(m.messageTimestamp) * 1000);
           if (!Number.isFinite(timestamp.getTime())) continue;
-          if (timestamp.toISOString() < c.activated_at) continue;
+          if (timestamp.getTime() < Math.floor(Date.parse(c.activated_at) / 1000) * 1000) continue;
           if (m.key.fromMe) {
             if (
               !this.store.one(

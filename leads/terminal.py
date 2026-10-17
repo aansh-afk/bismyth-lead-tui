@@ -480,7 +480,7 @@ class TUI:
                 if key in (ord('q'),ord('Q')):return
                 if ord('1')<=key<=ord('4'):self.page=key-ord('1');self.row=0;self.search=''
                 elif key==ord(' '):
-                    paused=self.state['settings']['automation_paused'];self.api.call('/api/settings',{'automation_paused':not paused});self.notice='Agent paused.'if not paused else'Agent started. Only active, permitted contacts can receive queued messages.';self.last_refresh=0
+                    paused=self.state['settings']['automation_paused'];self.api.call('/api/agent/start' if paused else '/api/agent/pause',{});self.notice='Agent paused.'if not paused else'Autonomous outreach started for enabled contacts.';self.last_refresh=0
                 elif key in (ord('r'),ord('R')):self.last_refresh=0
                 elif self.page==0:
                     if key in(ord('c'),ord('C')):self.chat()
@@ -512,7 +512,7 @@ def main():
     parser.add_argument('--data-dir',type=Path,help='Separate persistent workspace directory')
     parser.add_argument('--connect',help='Connect to an existing loopback service instead of starting one')
     parser.add_argument('--service',action='store_true',help='Run the local service without the TUI')
-    parser.add_argument('--version',action='version',version='Oracle Leads 0.2.5')
+    parser.add_argument('--version',action='version',version='Oracle Leads 0.3.0')
     parser.add_argument('--legacy-ui',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args()
     env=dict(os.environ)

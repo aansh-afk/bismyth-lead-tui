@@ -13,8 +13,8 @@
 
   RECENT ACTIVITY
 
-  13:26:01  Agent settings updated. In-flight drafts require fresh review.
-  13:26:01  Oracle Leads started. Outreach is paused.
+  14:45:32  Agent settings updated. In-flight drafts require fresh review.
+  14:45:32  Oracle Leads started. Outreach is paused.
 
 
 
@@ -137,7 +137,7 @@
   P Provider                     codex
   S Sales instructions           You are Oracle Leads, the Atlas relationship assistant for Bismyth. Be warm, hon
   K Atlas knowledge              Atlas supports lead intake, ownership and follow-ups, site visits, communication
-  A Reply mode                   review
+  A Reply mode                   auto
   D Daily send limit             30
   T Quiet hours (local time)     00:00–00:00
   M Meeting link                 Not configured
@@ -181,16 +181,16 @@
 
   RECENT ACTIVITY
 
-  13:26:05  Message accepted by WhatsApp transport.
-  13:26:05  Synthetic transport accepted one reviewed message.
-  13:26:05  Agent started for explicitly active contacts.
-  13:26:05  Exact message approved for dispatch.
-  13:26:04  Agent settings updated. In-flight drafts require fresh review.
-  13:26:02  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting record created.
-  13:26:02  Relationship memory saved.
-  13:26:01  Fixture One: relationship or agent access updated.
-  13:26:01  2 contacts imported; 0 duplicates; 0 invalid. All new contacts are inactive.
-  13:26:01  Agent settings updated. In-flight drafts require fresh review.
+  14:45:38  Message accepted by WhatsApp transport.
+  14:45:38  Synthetic transport accepted one reviewed message.
+  14:45:38  Autonomous outreach started; 0 relationships prepared from their saved context.
+  14:45:38  Agent started for explicitly active contacts.
+  14:45:37  Exact message approved for dispatch.
+  14:45:36  Agent settings updated. In-flight drafts require fresh review.
+  14:45:34  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting record created.
+  14:45:33  Relationship memory saved.
+  14:45:33  Fixture One: relationship or agent access updated.
+  14:45:33  2 contacts imported; 0 duplicates; 0 invalid. All new contacts are inactive.
 
 
 
@@ -204,7 +204,7 @@
   C Chat with Oracle  ·  M Meetings  ·  H Previous runs
   Oracle: Fixture summary: 2 contacts and 1 booked meetings.
 
-  Agent started. Only active, permitted contacts can receive queued messages.
+  Autonomous outreach started for enabled contacts.
   1–4 pages  ·  Space start/pause agent  ·  R refresh  ·  Q quit
 
 
@@ -218,7 +218,7 @@
   G Generate opener · W Write · J Drafts · O Opt-out · D Delete · Esc Back
 
   Memory (operator): Persistent fixture memory
-  10-17T13:26 YOU [sent] Synthetic reviewed message
+  10-17T14:45 YOU [sent] Synthetic reviewed message
 
 
 
