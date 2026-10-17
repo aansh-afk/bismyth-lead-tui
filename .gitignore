@@ -23,3 +23,6 @@ __pycache__/
 *.sqlite*
 .session-key
 service.lock
+
+leads/tui/target/
+leads/bin/

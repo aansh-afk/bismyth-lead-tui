@@ -26,7 +26,7 @@ def main():
         try:
             screen=pyte.Screen(128,40);stream=pyte.Stream(screen)
             def launch():
-                return pexpect.spawn(sys.executable,[str(ROOT/'terminal.py'),'--connect',f'http://127.0.0.1:{port}','--data-dir',directory,'--provider','codex'],env={**os.environ,'TERM':'xterm-256color'},dimensions=(40,128),encoding='utf-8',timeout=15)
+                return pexpect.spawn(sys.executable,[str(ROOT/'terminal.py'),'--connect',f'http://127.0.0.1:{port}','--data-dir',directory,'--provider','codex','--legacy-ui'],env={**os.environ,'TERM':'xterm-256color'},dimensions=(40,128),encoding='utf-8',timeout=15)
             child=launch()
             def view():return '\n'.join(screen.display)
             def wait(expected,timeout=12):

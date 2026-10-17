@@ -23,24 +23,29 @@ Requirements: Python 3.11+ with curses (Linux/macOS), Node.js 24+, and the depen
 ```sh
 cd /path/to/bismyth-lead-tui
 npm ci
+npm run build:tui # Rust toolchain required when building from source
 npm start
 ```
+
+The release includes a native Linux x86_64 frontend. Other Linux/macOS architectures can build it with `npm run build:tui`. The interface uses **Ratatui + Crossterm**, also used by OpenAI Codex CLI; it is an independent outreach interface backed by the existing Codex CLI integration.
+
+Click navigation, contact rows, action buttons, menu options, confirmations and text fields. Use the mouse wheel to scroll lists/conversations; click inside a field to place the caret. Bracketed paste and arrow-key editing are supported.
 
 The primary installed command is `~/.local/bin/bismyth-leads`. Optional local Oracle aliases open the same outreach app. Use a terminal at least **80×24** for normal operation. A WhatsApp QR can require about **80×46**; its page reports the actual minimum dimensions. Shrink the terminal font or enlarge the window to scan it.
 
 ## Four pages
 
-Use **1–4** to switch pages, **Space** to start/pause the worker, **R** to refresh, and **Q** to quit. Escape returns from a view. Single-line forms save with Enter; multi-line editors save with **Ctrl+G**. **Ctrl+U** clears a field.
+Use **1–4** to switch pages, **Space** to start/pause the worker, **R** to refresh, and **Q** to quit. Escape returns from a view. Single-line forms save with Enter; multi-line editors save with **Ctrl+S**, **Ctrl+G**, or the Save button. **Ctrl+U** clears a field.
 
 ### 1 — Dashboard
 
-Real counts for contacts, interest, meeting requests, booked local meetings, clients, sends, replies and drafts. Shows recent activity, follow-ups due and sampled active agent time. **C** opens persistent operator chat; press **C** again to ask a question such as “What happened in the previous run?” or “What did we promise this client?”. **H** opens previous runs; **M** opens meeting records.
+Real counts for contacts, interest, meeting requests, booked local meetings, clients, sends, replies and drafts. Shows recent activity, follow-ups due and sampled active agent time. **C** focuses the persistent inline operator chat; type a question such as “What happened in the previous run?” or “What did we promise this client?”. **H** opens previous runs; **M** opens meeting records.
 
 Dashboard chat is read-only: it can explain the records but cannot send messages, create bookings or alter contacts. It retrieves a bounded set of relevant relationships, source messages and memories instead of uploading the entire database. It identifies when additional records are needed.
 
 ### 2 — WhatsApp
 
-**C** connects the local Baileys service and displays its QR. Scan it yourself from WhatsApp → Linked devices → Link a device. The connected phone identity comes from the paired account. **X** disconnects; **U** unlinks with explicit confirmation. The inbox lists only contacts currently active for that sender.
+**C** connects the local Baileys service and displays its QR. Scan it yourself from WhatsApp → Linked devices → Link a device. The connected phone identity comes from the paired account. Use **Disconnect** or **Unlink** with explicit confirmation. The inbox lists only contacts currently active for that sender.
 
 The service stores Baileys credentials/Signal keys in the private local SQLite database rather than the example multi-file auth store. It requests no full historical chat sync. Direct messages require an exact scoped number; WhatsApp LIDs require a legitimate explicit phone mapping. Groups, broadcasts, historical replay and unscoped contacts do not reach the relationship agent.
 
@@ -58,16 +63,15 @@ name,phone,company,role,source,notes
 
 Use international phone numbers beginning with `+` and a country code. JSON accepts an array or `{ "contacts": [...] }`. Numbers are deduplicated. Import never records consent or activates the agent, even when the input contains active/consent fields. Exports guard against spreadsheet formula execution.
 
-Inside a contact:
+Open **Actions** for the complete relationship menu. Keyboard shortcuts on the contact pages:
 
 - **A** explicitly records WhatsApp permission and enables/disables scope for the paired sender.
-- **P** toggles human takeover; **O** records an opt-out.
-- **E** edits contact details, notes, next action and an ISO follow-up date; **S** changes relationship stage.
-- **N** adds a permanent relationship note; **V** inspects, corrects or deletes memories. Model summaries retain their source-message ID. Operator corrections remain labelled separately.
-- **G** generates an opening draft. Even in automatic reply mode, an opening draft requires exact operator review.
-- **W** writes a manual draft; **J** reviews drafts/operations. Queueing the exact message requires typing **SEND**. The worker must be running, connected, within quiet-hour rules and below the daily cap.
-- **M** creates a local meeting; **B** manages meetings and outcomes; **F** prepares a configured link as a reviewed message.
-- **D** deletes the contact and their local conversations, memories, jobs and meetings after confirmation.
+- **P** toggles human takeover.
+- **N** adds a permanent relationship note. Use Actions to inspect/correct memories and edit relationship details, stage, next action and follow-up dates.
+- **G** generates an opening draft; **W** writes one; **J** opens drafts and unresolved sends. Opening messages always require exact review.
+- Use Actions to create meetings, record outcomes, opt-outs, prepare configured links, or delete a relationship. **M** opens meeting records.
+
+Queueing opens a second review showing the exact message and recipient; choose **Queue message** or press **Y**. Enter cancels. The worker must be running, connected, within quiet-hour rules and below the daily cap.
 
 Meeting records are local CRM records. They do not create or cancel external calendar invitations. Configured successful/unsuccessful outcome links produce a follow-up draft (or an approved-rule queue entry in automatic mode) once per outcome while the contact remains in scope. Quiet hours and opt-outs still apply.
 
@@ -103,11 +107,12 @@ Interrupted generation is cancelled. Interrupted sends become **uncertain**; the
 npm test
 # Optional terminal QA dependencies, preferably in a venv:
 pip install -r leads/tests/requirements-qa.txt
-python3 leads/tests/terminal_smoke.py
+python3 leads/tests/native_smoke.py
+python3 leads/tests/terminal_smoke.py # compatibility UI
 python3 leads/tests/installed_smoke.py
 ```
 
-The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [the verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
+The terminal tests use synthetic contacts and a loopback fake WhatsApp transport. See [native interface verification](leads/docs/verification-native-2026-10-17.md) and [the service verification report](leads/docs/verification-2026-10-17.md) for measured checks and live limitations. No customer message was sent during development.
 
 Voice mode, external calendar synchronization, and autonomous discovery are deferred. Baileys is an unofficial WhatsApp Web integration; QR readiness is tested separately from real account pairing and message delivery.
 
@@ -116,7 +121,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.0/bismyth-lead-tui-0.2.0.tgz
+npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.2.1/bismyth-lead-tui-0.2.1.tgz
 bismyth-leads
 ```
 

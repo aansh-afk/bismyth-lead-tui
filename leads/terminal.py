@@ -7,6 +7,7 @@ import datetime as dt
 import http.cookiejar
 import json
 import os
+import platform
 from pathlib import Path
 import queue
 import select
@@ -511,7 +512,8 @@ def main():
     parser.add_argument('--data-dir',type=Path,help='Separate persistent workspace directory')
     parser.add_argument('--connect',help='Connect to an existing loopback service instead of starting one')
     parser.add_argument('--service',action='store_true',help='Run the local service without the TUI')
-    parser.add_argument('--version',action='version',version='Oracle Leads 0.2.0')
+    parser.add_argument('--version',action='version',version='Oracle Leads 0.2.1')
+    parser.add_argument('--legacy-ui',action='store_true',help=argparse.SUPPRESS)
     args=parser.parse_args()
     env=dict(os.environ)
     if args.data_dir:env['ORACLE_LEADS_DATA']=str(args.data_dir.expanduser().resolve())
@@ -536,8 +538,18 @@ def main():
             info=json.loads(line);base='http://127.0.0.1:'+str(info['port'])
         if not sys.stdin.isatty() or not sys.stdout.isatty():raise RuntimeError('Open Oracle Leads in an interactive terminal.')
         data_dir=args.data_dir.expanduser() if args.data_dir else Path(env.get('ORACLE_LEADS_DATA',Path.home()/'.local/share/oracle-leads'))
-        api=API(base,(data_dir/'.session-key').read_text().strip())
-        curses.wrapper(lambda screen:TUI(screen,api,args.provider).run())
+        if args.legacy_ui:
+            api=API(base,(data_dir/'.session-key').read_text().strip())
+            curses.wrapper(lambda screen:TUI(screen,api,args.provider).run())
+        else:
+            binary=ROOT/'bin'/('oracle-leads-tui-'+sys.platform+'-'+platform.machine())
+            if not binary.exists():
+                raise RuntimeError('Native terminal frontend is missing. Build it with: python3 '+str(ROOT/'build_tui.py'))
+            ui_env={**env,'ORACLE_LEADS_URL':base,'ORACLE_LEADS_KEY_FILE':str(data_dir/'.session-key')}
+            if args.provider:ui_env['ORACLE_LEADS_PROVIDER']=args.provider
+            else:ui_env.pop('ORACLE_LEADS_PROVIDER',None)
+            result=subprocess.call([str(binary)],env=ui_env)
+            if result: return result
     except(KeyboardInterrupt,SystemExit):pass
     except Exception as error:
         print('bismyth-leads: '+str(error),file=sys.stderr);return 1
