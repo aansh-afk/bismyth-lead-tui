@@ -2,7 +2,7 @@
                       │  Prospect sources                                                                                        ▶ Start agent         ?
   ◈  ORACLE           │
      L E A D S        │
-     v0.6.0           │    Search web     Scrape URL     Crawl site     Collect     Contacts     Companies     Manage     Configure     Runs     Credits
+     v0.7.0           │    Search web     Scrape URL     Crawl site     Collect     Contacts     Companies     Manage     Configure     Runs     Credits
                       │
   WORKSPACE           │
                       │
@@ -10,30 +10,30 @@
       Overview & chat │  ╭ SAVED SOURCES ───────────────────────────────────────╮ ╭ SOURCE & CONTACT EVIDENCE ───────────────────────────────────────────────╮
                       │  │  Fixture About · scraped                             │ │ Fixture Brokerage                                                        │
   02  WhatsApp        │  │› Fixture Brokerage · scraped                         │ │ https://fixture.example.test/contact                                     │
-      Scoped inbox    │  │                                                      │ │ scraped · 2026-10-17T17:47                                               │
+      Scoped inbox    │  │                                                      │ │ scraped · 2026-10-17T18:08                                               │
                       │  │                                                      │ │                                                                          │
   03  Contacts        │  │                                                      │ │ Synthetic public business source                                         │
       People & memory │  │                                                      │ │                                                                          │
                       │  │                                                      │ │ CONTACTS & COMPANIES                                                     │
-  04  Settings        │  │                                                      │ │ Fixture Owner · Owner                                                    │
-      Agent settings  │  │                                                      │ │ Company: Fixture Brokerage                                               │
+  04  Settings        │  │                                                      │ │ Saved to Contacts from this source: 1                                    │
+      Agent settings  │  │                                                      │ │                                                                          │
+                      │  │                                                      │ │ CRM: Fixture Owner · +919876543210 · new                                 │
+  05  Sources         │  │                                                      │ │                                                                          │
+      Find prospects  │  │                                                      │ │ Fixture Owner · Owner                                                    │
+                      │  │                                                      │ │ Company: Fixture Brokerage                                               │
                       │  │                                                      │ │ Phone: +919876543210 Email: owner@fixture.example.test                   │
-  05  Sources         │  │                                                      │ │ Evidence: Fixture Owner, Owner at Fixture Brokerage. Call +91 98765      │
-      Find prospects  │  │                                                      │ │ 43210. Email owner@fixture.example.test                                  │
+                      │  │                                                      │ │ Evidence: Fixture Owner, Owner at Fixture Brokerage. Call +91 98765      │
+                      │  │                                                      │ │ 43210. Email owner@fixture.example.test                                  │
                       │  │                                                      │ │                                                                          │
                       │  │                                                      │ │                                                                          │
                       │  │                                                      │ │ EMAILS                                                                   │
                       │  │                                                      │ │ owner@fixture.example.test                                               │
                       │  │                                                      │ │                                                                          │
                       │  │                                                      │ │ PAGE CONTENT                                                             │
-                      │  │                                                      │ │ # Fixture Brokerage                                                      │
-                      │  │                                                      │ │                                                                          │
+  MODEL               │  │                                                      │ │ # Fixture Brokerage                                                      │
+  Codex subscription  │  │                                                      │ │                                                                          │
                       │  │                                                      │ │ Fixture Owner, Owner at Fixture Brokerage. Call +91 98765 43210. Email   │
                       │  │                                                      │ │ owner@fixture.example.test                                               │
-  MODEL               │  │                                                      │ │                                                                          │
-  Codex subscription  │  │                                                      │ │                                                                          │
-                      │  │                                                      │ │                                                                          │
-                      │  │                                                      │ │                                                                          │
   WHATSAPP            │  │                                                      │ │                                                                          │
   connected           │  │                                                      │ │                                                                          │
                       │  │                                                      │ │                                                                          │

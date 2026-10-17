@@ -1006,10 +1006,23 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
                     format!("{}\n{}", strv(&c, "next_action"), strv(&c, "followup_at"))
                 },
             );
+            let origins = list(&app.detail, "sources");
+            if origins.is_empty() || !origins.iter().any(|s| strv(s, "url") == strv(&c, "source")) {
+                add("SOURCE", strv(&c, "source").into());
+            }
+            if !origins.is_empty() {
+                add(
+                    "SCRAPED FROM",
+                    origins
+                        .iter()
+                        .map(|s| format!("{}\n{}", strv(s, "title"), strv(s, "url")))
+                        .collect::<Vec<_>>()
+                        .join("\n\n"),
+                );
+            }
             if !strv(&c, "notes").is_empty() {
                 add("NOTES", strv(&c, "notes").into());
             }
-            add("SOURCE", strv(&c, "source").into());
         }
         if list(&app.detail, "memories").is_empty() {
             add(
@@ -1182,6 +1195,7 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
         let p = &app.detail;
         let candidates = list(p, "candidates");
         let emails = list(p, "emails");
+        let imported = list(p, "imported_contacts");
         let mut content = format!(
             "{}\n{}\n{} · {}\n\n{}\n\nCONTACTS & COMPANIES\n",
             strv(p, "title"),
@@ -1190,6 +1204,19 @@ fn sources(f: &mut Frame, app: &mut App, area: Rect) {
             clip(strv(p, "updated_at"), 16),
             strv(p, "description")
         );
+        content.push_str(&format!(
+            "Saved to Contacts from this source: {}\n\n",
+            imported.len()
+        ));
+        for c in &imported {
+            content.push_str(&format!(
+                "CRM: {} · {} · {}\n",
+                strv(c, "name"),
+                strv(c, "phone"),
+                strv(c, "stage")
+            ));
+        }
+        content.push('\n');
         if candidates.is_empty() {
             content.push_str("No verified-format phone candidates yet. Inspect the page or crawl its contact pages.\n");
         }

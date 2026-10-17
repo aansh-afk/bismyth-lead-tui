@@ -359,6 +359,10 @@ export class Sources {
       ...p,
       candidates: JSON.parse(p.candidates),
       emails: JSON.parse(p.emails),
+      imported_contacts: this.store.all(
+        "SELECT c.id,c.name,c.phone,c.company,c.role,c.stage,c.active,c.consent FROM contacts c JOIN contact_sources s ON s.contact_id=c.id WHERE s.url=? ORDER BY c.name",
+        p.url,
+      ),
     };
   }
   async request(path, body, method = body === undefined ? "GET" : "POST") {
@@ -580,6 +584,7 @@ export class Sources {
       );
       if (this.closed) throw new Error("Source research is closed.");
       let count = 0;
+      const savedPages = [];
       if (kind === "crawl" || kind === "batch") {
         if (
           typeof result.id !== "string" ||
@@ -608,7 +613,7 @@ export class Sources {
           throw new Error("Firecrawl returned invalid source pages.");
         for (const page of pages.slice(0, kind === "search" ? limit : 1)) {
           try {
-            this.savePage(page, run, kind === "scrape");
+            savedPages.push(this.savePage(page, run, kind === "scrape"));
             count++;
           } catch {}
         }
@@ -629,7 +634,28 @@ export class Sources {
         "source_research",
         `Firecrawl ${kind}: ${count} pages saved${["crawl", "batch"].includes(kind) ? "; research running" : ""}.`,
       );
-      return { ok: true, id: run.id, saved: count };
+      let imported = null,
+        import_error = null;
+      if (
+        kind === "scrape" &&
+        input.import_contacts === true &&
+        savedPages.length
+      ) {
+        try {
+          imported = this.importAll({ page_ids: savedPages });
+        } catch {
+          import_error =
+            "Page saved, but local contact import failed. Use this source's import action to retry without scraping again.";
+        }
+      }
+      return {
+        ok: true,
+        id: run.id,
+        saved: count,
+        page_id: savedPages[0] || null,
+        imported,
+        import_error,
+      };
     } catch (error) {
       if (!this.closed)
         this.store.run(
@@ -858,8 +884,48 @@ export class Sources {
         ),
       };
     });
+    const imported = this.store.importContacts(rows);
+    // Append provenance independently of CRM fields; duplicates retain their stage and scope.
+    this.store.db.exec("BEGIN IMMEDIATE");
+    try {
+      for (const [number, group] of grouped) {
+        const contact = this.store.one(
+          "SELECT id FROM contacts WHERE phone=?",
+          number,
+        );
+        if (!contact) continue;
+        const byUrl = new Map();
+        for (const c of group)
+          for (const source of c.sources) {
+            if (!byUrl.has(source.url))
+              byUrl.set(source.url, {
+                title: source.title,
+                passages: new Set(),
+              });
+            byUrl
+              .get(source.url)
+              .passages.add(
+                `Name: ${c.name || "Not stated"}\nCompany: ${c.company || "Not stated"}\nRole: ${c.role || "Not stated"}\nEmail: ${c.emails?.join(", ") || c.email || "Not stated"}\n${source.evidence}`,
+              );
+          }
+        for (const [url, source] of byUrl)
+          this.store.run(
+            "INSERT INTO contact_sources VALUES(?,?,?,?,?,?) ON CONFLICT(contact_id,url) DO UPDATE SET title=excluded.title,evidence=excluded.evidence,updated_at=excluded.updated_at",
+            contact.id,
+            url,
+            source.title,
+            clip([...source.passages].join("\n\n"), 12000),
+            now(),
+            now(),
+          );
+      }
+      this.store.db.exec("COMMIT");
+    } catch (error) {
+      this.store.db.exec("ROLLBACK");
+      throw error;
+    }
     return {
-      ...this.store.importContacts(rows),
+      ...imported,
       email_only,
       without_phone,
       site_contacts,

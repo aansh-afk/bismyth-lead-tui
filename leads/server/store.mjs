@@ -95,7 +95,9 @@ export class Store {
     this.db.exec(`CREATE TABLE IF NOT EXISTS source_pages(id TEXT PRIMARY KEY,url TEXT UNIQUE NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL,markdown TEXT NOT NULL,candidates TEXT NOT NULL,emails TEXT NOT NULL,status TEXT NOT NULL,query TEXT NOT NULL,run_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS source_runs(id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,page_limit INTEGER NOT NULL,completed INTEGER NOT NULL DEFAULT 0,total INTEGER NOT NULL DEFAULT 0,credits INTEGER,error TEXT,cursor TEXT NOT NULL DEFAULT '',dial_code TEXT NOT NULL,country TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
       CREATE INDEX IF NOT EXISTS source_pages_updated ON source_pages(updated_at DESC);
-      PRAGMA user_version=4;`);
+      CREATE TABLE IF NOT EXISTS contact_sources(contact_id TEXT NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,url TEXT NOT NULL,title TEXT NOT NULL,evidence TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,PRIMARY KEY(contact_id,url));
+      CREATE INDEX IF NOT EXISTS contact_sources_url ON contact_sources(url);
+      PRAGMA user_version=5;`);
     if (!this.get("settings")) this.set("settings", defaults);
     this.db
       .prepare(
@@ -431,6 +433,7 @@ export class Store {
   detail(contactId) {
     return {
       contact: this.contact(contactId),
+      sources: this.all("SELECT * FROM contact_sources WHERE contact_id=? ORDER BY updated_at DESC",contactId),
       messages: this.all(
         "SELECT * FROM (SELECT * FROM messages WHERE contact_id=? ORDER BY created_at DESC LIMIT 200) ORDER BY created_at",
         contactId,
@@ -610,6 +613,7 @@ export class Store {
   backup() {
     const tables = [
       "contacts",
+      "contact_sources",
       "messages",
       "memories",
       "meetings",
@@ -676,6 +680,7 @@ export class Store {
         "next_action",
         "followup_at",
       ],
+      contact_sources:["contact_id","url","title","evidence","created_at","updated_at"],
       messages: [
         "id",
         "contact_id",

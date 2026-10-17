@@ -546,7 +546,21 @@ impl App {
             self.busy = false;
             match done.result {
                 Ok(value) => {
-                    self.notice = if done.next == "import" {
+                    self.notice = if done.next == "source-result" {
+                        if !strv(&value, "import_error").is_empty() {
+                            strv(&value, "import_error").into()
+                        } else {
+                            let imported = &value["imported"];
+                            format!(
+                                "Source saved · added {} · existing {} · no phone {} · site contacts skipped {} · invalid {}",
+                                num(imported, "added"),
+                                num(imported, "duplicates"),
+                                num(imported, "without_phone"),
+                                num(imported, "site_contacts"),
+                                list(imported, "errors").len()
+                            )
+                        }
+                    } else if done.next == "import" {
                         format!(
                             "Imported {} contacts · {} duplicates · {} invalid. New contacts are inactive.",
                             num(&value, "added"),
@@ -576,6 +590,15 @@ impl App {
                     };
                     self.last_refresh = Instant::now() - Duration::from_secs(2);
                     self.refresh();
+                    if done.next == "source-result"
+                        && self.page == 4
+                        && let Some(index) = self
+                            .source_pages()
+                            .iter()
+                            .position(|p| p["id"] == value["page_id"])
+                    {
+                        self.select(index);
+                    }
                     if done.next == "draft-created" {
                         self.review_jobs();
                     }
@@ -907,7 +930,7 @@ impl App {
             "select-id"=>{self.page(2);if let Some(index)=self.contacts().iter().position(|c|c["id"]==action.data){self.select(index);}},
             "source-key"=>self.form("Connect Firecrawl","Enter your Firecrawl API key. Input is masked and saved privately outside exports. Blank removes the saved key.","source-key",Value::Null,vec![Field::secret("Firecrawl API key")]),
             "source-search"=>self.form("Find Atlas prospects","Search public sources. Firecrawl account credits apply; contacts remain inactive until you enable them.","source-search",Value::Null,vec![Field::new("Search query","real estate brokerage owners",false),Field::new("Location","Pune, India",false),Field::new("Country · two letters","IN",false),Field::new("Result limit · 1–100","5",false)]),
-            "source-scrape"|"source-scrape-selected"=>self.form("Inspect a website page","Extract names, roles, companies and public phone/email evidence from one page. Firecrawl credits apply.","source-scrape",Value::Null,vec![Field::new("Website URL",if action.name=="source-scrape-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Country calling code for local phones","91",false)]),
+            "source-scrape"|"source-scrape-selected"=>self.form("Inspect a website page","Scrape one source and add its phone contacts to Contacts, with source links. New contacts stay inactive; site contacts are skipped. Firecrawl credits apply.","source-scrape",Value::Null,vec![Field::new("Website URL",if action.name=="source-scrape-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Country calling code for local phones","91",false)]),
             "source-crawl"|"source-crawl-selected"=>self.form("Crawl a whole website","Follow pages within this website. Set a page limit; Firecrawl credits apply. Progress continues in Research runs.","source-crawl",Value::Null,vec![Field::new("Website URL",if action.name=="source-crawl-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Maximum pages · 1–100","10",false),Field::new("Country calling code for local phones","91",false)]),
             "source-actions"=>self.source_actions(),
             "source-select"=>{self.row=action.data.as_u64().unwrap_or(0)as usize;self.thread_scroll=0;self.refresh_detail();},
@@ -916,7 +939,9 @@ impl App {
             "source-all-contacts"=>self.source_contacts_menu(true,""),
             "source-companies"=>self.owned_menu("Companies from sources","Contacts stay linked to their stated company. Matching names on unrelated domains remain separate.",list(&self.state["sources"],"companies").into_iter().map(|c|(format!("{} · {} contacts · {}",strv(&c,"name"),num(&c,"contacts"),strv(&c,"website")),Action::new("source-company",c))).collect()),
             "source-company"=>self.source_contacts_menu(true,strv(&action.data,"key")),
-            "source-contact-detail"=>{let c=action.data;let mut items=vec![(format!("Type: {}",strv(&c,"kind")),Action::new("source-contact-detail",c.clone())),(format!("Name: {}",strv(&c,"name")),Action::new("source-contact-detail",c.clone())),(format!("Role: {}",strv(&c,"role")),Action::new("source-contact-detail",c.clone())),(format!("Company: {}",strv(&c,"company")),Action::new("source-contact-detail",c.clone())),(format!("Phone: {}",strv(&c,"phone")),Action::new("source-contact-detail",c.clone())),(format!("Email: {}",strv(&c,"email")),Action::new("source-contact-detail",c.clone()))];if !strv(&c,"phone").is_empty(){items.push(("Import this phone contact".into(),Action::new("source-import",json!({"page_id":c["sources"][0]["page_id"],"phone":c["phone"]}))));}for source in list(&c,"sources"){items.push((format!("Source: {}",strv(&source,"url")),Action::new("source-open",source)));}if !strv(&c,"company_key").is_empty(){items.push(("See everyone at this company".into(),Action::new("source-company",json!({"key":c["company_key"]}))));}self.owned_menu("Contact & company relationship","Missing fields were not stated. A shared phone imports once with all associated people in its notes; email-only records remain in research.",items);},
+            "source-contact-detail"=>{let c=action.data;let mut items=vec![(format!("Type: {}",strv(&c,"kind")),Action::new("source-contact-detail",c.clone())),(format!("Name: {}",strv(&c,"name")),Action::new("source-contact-detail",c.clone())),(format!("Role: {}",strv(&c,"role")),Action::new("source-contact-detail",c.clone())),(format!("Company: {}",strv(&c,"company")),Action::new("source-contact-detail",c.clone())),(format!("Phone: {}",strv(&c,"phone")),Action::new("source-contact-detail",c.clone())),(format!("Email: {}",strv(&c,"email")),Action::new("source-contact-detail",c.clone()))];if let Some(saved)=list(&self.state,"contacts").into_iter().find(|saved|saved["phone"]==c["phone"]){items.push(("Open saved relationship".into(),Action::new("source-open-crm",saved)));}
+if !strv(&c,"phone").is_empty(){items.push(("Import this phone contact".into(),Action::new("source-import",json!({"page_id":c["sources"][0]["page_id"],"phone":c["phone"]}))));}for source in list(&c,"sources"){items.push((format!("Source: {}",strv(&source,"url")),Action::new("source-open",source)));}if !strv(&c,"company_key").is_empty(){items.push(("See everyone at this company".into(),Action::new("source-company",json!({"key":c["company_key"]}))));}self.owned_menu("Contact & company relationship","Missing fields were not stated. A shared phone imports once with all associated people in its notes; email-only records remain in research.",items);},
+            "source-open-crm"=>{let id=strv(&action.data,"id").to_owned();self.page(2);self.detail_tab=0;if let Some(index)=self.contacts().iter().position(|c|strv(c,"id")==id){self.select(index);}},
             "source-open"=>{let rows=self.source_pages();if let Some(i)=rows.iter().position(|p|p["id"]==action.data["page_id"]){self.row=i;self.thread_scroll=0;self.refresh_detail();}},
             "source-import"=>self.confirm("Import this sourced phone?",format!("{}\n\nSave the extracted name, company, role, email and source evidence. Shared numbers become one relationship with associated people in its notes. Existing contacts keep their data and permissions.",strv(&action.data,"phone")),Action::new("request",json!({"path":"/api/sources/import","body":action.data,"notice":"Sourced contact imported. New leads are inactive."}))),
             "source-collect"=>self.form("Collect contacts from saved results","Batch scrape discovered pages with named contact extraction. Discovered and older unnamed pages are collected. Optional refresh re-scrapes saved pages. Firecrawl credits apply.","source-collect",Value::Null,vec![Field::new("Maximum saved pages · 1–100","10",false),Field::new("Country calling code","91",false),Field::new("Refresh already scraped pages · yes/no","no",false)]),
@@ -967,9 +992,9 @@ impl App {
                 }
                 "source-scrape" => self.request(
                     "/api/sources/scrape",
-                    json!({"url":values[0],"dial_code":values[1]}),
-                    "Page saved with public contact evidence.",
-                    "",
+                    json!({"url":values[0],"dial_code":values[1],"import_contacts":true}),
+                    "Source saved and phone contacts added.",
+                    "source-result",
                 ),
                 "source-crawl" => {
                     let limit = values[1]

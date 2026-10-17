@@ -770,3 +770,158 @@ test("the same named phone on multiple pages merges missing/present emails while
   assert.equal(owner[0].sources.length, 2);
   assert.equal(owner[0].role, "Owner");
 });
+
+test("explicit scrape-and-import adds inactive phone contacts immediately and returns their source page", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  const r = await f.sources.start("scrape", {
+    url: page.metadata.sourceURL,
+    import_contacts: true,
+  });
+  assert.equal(r.saved, 1);
+  assert.equal(r.imported.added, 2);
+  assert.equal(r.imported.without_phone, 1);
+  assert.equal(r.import_error, null);
+  assert.equal(f.sources.detail(r.page_id).imported_contacts.length, 2);
+  const c = f.store.state().contacts.find((c) => c.name === "Asha Rao");
+  assert.equal(c.active, 0);
+  assert.equal(c.consent, 0);
+  assert.equal(c.source, page.metadata.sourceURL);
+  const provenance = f.store.detail(c.id).sources;
+  assert.equal(provenance.length, 1);
+  assert.equal(provenance[0].url, page.metadata.sourceURL);
+  assert(provenance[0].evidence.includes("Asha Rao"));
+  assert(provenance[0].evidence.includes("Meridian Realty"));
+  const second = await f.sources.start("scrape", {
+    url: page.metadata.sourceURL,
+    import_contacts: true,
+  });
+  assert.equal(second.imported.added, 0);
+  assert.equal(second.imported.duplicates, 2);
+  assert.equal(f.store.detail(c.id).sources.length, 1);
+});
+test("new source attribution is added to an existing phone without overwriting CRM data or permissions", async (t) => {
+  let p = namedPage();
+  const f = fixture(t, () => ({ success: true, data: p }));
+  await f.sources.start("scrape", {
+    url: p.metadata.sourceURL,
+    import_contacts: true,
+  });
+  const c = f.store.state().contacts.find((c) => c.name === "Asha Rao");
+  f.store.patchContact(
+    c.id,
+    { stage: "client", notes: "Operator notes", consent: true, active: true },
+    "+12025550199",
+  );
+  const before = f.store.contact(c.id);
+  p = namedPage("https://directory.example.test/meridian");
+  const r = await f.sources.start("scrape", {
+    url: p.metadata.sourceURL,
+    import_contacts: true,
+  });
+  assert.equal(r.imported.duplicates, 2);
+  assert.deepEqual(f.store.contact(c.id), before);
+  assert.equal(f.store.detail(c.id).sources.length, 2);
+  assert(
+    f.store.detail(c.id).sources.some((s) => s.url === p.metadata.sourceURL),
+  );
+  assert.equal(
+    f.sources.detail(r.page_id).imported_contacts.find((row) => row.id === c.id)
+      .stage,
+    "client",
+  );
+  f.sources.deletePages({ all: true });
+  assert.equal(f.store.detail(c.id).sources.length, 2);
+});
+test("scraping remains research-only unless importing is explicitly requested", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  const r = await f.sources.start("scrape", { url: page.metadata.sourceURL });
+  assert.equal(r.imported, null);
+  assert.equal(f.store.state().contacts.length, 0);
+  assert.equal(f.sources.detail(r.page_id).imported_contacts.length, 0);
+});
+test("a successful paid scrape with a local import failure stays saved and can import later without another provider request", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  const original = f.sources.importAll.bind(f.sources);
+  f.sources.importAll = () => {
+    throw Error("Synthetic local write failure");
+  };
+  const r = await f.sources.start("scrape", {
+    url: page.metadata.sourceURL,
+    import_contacts: true,
+  });
+  assert.equal(r.saved, 1);
+  assert(r.import_error.includes("without scraping again"));
+  assert.equal(f.sources.state().runs[0].status, "completed");
+  assert.equal(f.sources.detail(r.page_id).candidates.length, 3);
+  f.sources.importAll = original;
+  assert.equal(f.sources.importAll({ page_ids: [r.page_id] }).added, 2);
+  assert.equal(f.calls.length, 1);
+});
+test("per-contact source links survive backup restore and old backups without the new table still restore", async (t) => {
+  const f = fixture(t, () => ({ success: true, data: namedPage() }));
+  await f.sources.start("scrape", {
+    url: page.metadata.sourceURL,
+    import_contacts: true,
+  });
+  const backup = f.store.backup();
+  assert.equal(backup.contact_sources.length, 2);
+  const restore = (data) => {
+    const path = mkdtempSync(join(tmpdir(), "source-links-restore-"));
+    const store = new Store(join(path, "test.sqlite"));
+    t.after(() => {
+      store.close();
+      rmSync(path, { recursive: true, force: true });
+    });
+    store.restore(data);
+    return store;
+  };
+  const restored = restore(backup);
+  assert.equal(restored.all("SELECT * FROM contact_sources").length, 2);
+  assert(restored.state().contacts.every((c) => !c.active && !c.consent));
+  delete backup.contact_sources;
+  assert.equal(restore(backup).all("SELECT * FROM contact_sources").length, 0);
+});
+test("scrape-and-import excludes association contacts and keeps phone-less members in source results", async (t) => {
+  const f = fixture(t, () => ({
+    success: true,
+    data: {
+      url: "https://reaak.com/members.php",
+      markdown:
+        "## Members\nEXAMPLE FIRM (MR. SYNTHETIC PERSON)\nCall +91 90000 00000",
+    },
+  }));
+  const r = await f.sources.start("scrape", {
+    url: "https://reaak.com/members.php",
+    import_contacts: true,
+  });
+  assert.equal(r.imported.added, 0);
+  assert.equal(r.imported.site_contacts, 1);
+  assert.equal(r.imported.without_phone, 1);
+  assert.equal(f.sources.detail(r.page_id).candidates.length, 2);
+  assert.equal(f.store.state().contacts.length, 0);
+});
+
+test("schema v4 workspaces gain source attribution storage without changing their existing CRM rows", (t) => {
+  const f = fixture(t);
+  f.store.importContacts([
+    {
+      phone: "+12025550101",
+      name: "Existing v4 relationship",
+      company: "Saved company",
+      notes: "Keep permanent context",
+    },
+  ]);
+  const c = f.store.state().contacts[0];
+  f.store.memory(c.id, "Keep this fact");
+  const before = f.store.contact(c.id);
+  f.store.db.exec("DROP TABLE contact_sources; PRAGMA user_version=4");
+  const migrated = new Store(f.store.path);
+  try {
+    assert.equal(migrated.one("PRAGMA user_version").user_version, 5);
+    assert.deepEqual(migrated.contact(c.id), before);
+    assert.equal(migrated.detail(c.id).memories[0].content, "Keep this fact");
+    assert.deepEqual(migrated.detail(c.id).sources, []);
+  } finally {
+    migrated.close();
+  }
+});
