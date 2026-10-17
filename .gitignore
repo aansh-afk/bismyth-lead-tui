@@ -17,3 +17,9 @@ session.lock
 runs/
 chrome-profile/
 releases/
+
+__pycache__/
+*.pyc
+*.sqlite*
+.session-key
+service.lock

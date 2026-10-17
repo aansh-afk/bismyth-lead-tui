@@ -1,40 +1,42 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.1.22",
-  "description": "Interactive property enquiry CLI with Playwright and ChatGPT-backed Codex decisions",
-  "license": "MIT",
+  "version": "0.2.0",
+  "description": "Oracle Leads: terminal outreach and relationship workspace with scoped WhatsApp and persistent memory",
+  "license": "(MIT AND Apache-2.0)",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/aansh-afk/bismyth-lead-tui.git"
   },
   "homepage": "https://github.com/aansh-afk/bismyth-lead-tui#readme",
   "bin": {
-    "bismyth-leads": "launch.mjs"
+    "bismyth-leads": "leads/launch.sh"
   },
   "files": [
-    "launch.mjs",
-    "dist/*.js",
-    "data",
-    "examples",
-    "install.sh",
-    "scripts/transcribe-audio.py"
+    "leads/server",
+    "leads/terminal.py",
+    "leads/launch.sh",
+    "leads/docs",
+    "oracle.py",
+    "engine.py",
+    "instructions.md",
+    "catalog.json",
+    "UPSTREAM-NOTICE",
+    "ORACLE-LICENSE",
+    "install.sh"
   ],
   "type": "module",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=24"
   },
   "scripts": {
-    "build": "tsc",
-    "prepack": "npm run build",
-    "start": "node launch.mjs",
-    "test": "npm run build && node --test dist/tests/core.test.js dist/tests/accounts.test.js dist/tests/account-browser.test.js dist/tests/nobroker-login.test.js dist/tests/account-view.test.js dist/tests/account-setup.test.js dist/tests/terminal-message.test.js dist/tests/browser.test.js dist/tests/captcha.test.js dist/tests/captcha-calm.test.js dist/tests/captcha-continuation.test.js dist/tests/captcha-visible-grid.test.js dist/tests/listing-api.test.js dist/tests/api-browser.test.js dist/tests/audio-browser.test.js dist/tests/audio-captcha.test.js dist/tests/doctor-audio.test.js dist/tests/subscription.test.js dist/tests/contacts.test.js dist/tests/firecrawl.test.js dist/tests/contact-ai.test.js dist/tests/whatsapp.test.js dist/tests/outreach.test.js dist/tests/recipient-selection.test.js dist/tests/contact-workflow.test.js dist/tests/contact-cancellation.test.js dist/tests/contact-router-flow.test.js dist/tests/housing-login.test.js dist/tests/quikr-login.test.js dist/tests/discovery-access.test.js dist/tests/account-security-badge.test.js dist/tests/run-shortcut.test.js dist/tests/contact-provenance.test.js dist/tests/portal-catalog.test.js dist/tests/nobroker-flow.test.js dist/tests/portal-contact-capture.test.js dist/tests/portal-capture-workflow.test.js dist/tests/portal-chat.test.js dist/tests/portal-enquiry-browser.test.js dist/tests/portal-safety-regression.test.js dist/tests/portal-manual-verification.test.js",
-    "test:batches": "npm run build && node --test dist/tests/batches.test.js"
+    "start": "python3 leads/terminal.py",
+    "test": "node --test leads/tests/*.test.mjs",
+    "test:terminal": "python3 leads/tests/terminal_smoke.py",
+    "test:installed": "python3 leads/tests/installed_smoke.py"
   },
   "dependencies": {
-    "playwright-core": "1.64.0"
-  },
-  "devDependencies": {
-    "@types/node": "^24.13.2",
-    "typescript": "~6.0.2"
+    "@whiskeysockets/baileys": "7.0.0-rc14",
+    "pino": "9.14.0",
+    "qrcode": "1.5.4"
   }
 }

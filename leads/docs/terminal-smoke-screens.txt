@@ -1,0 +1,250 @@
+=== SYNTHETIC dashboard-empty ===
+
+  ◈ ORACLE LEADS                                                                        CODEX  ·  PAUSED
+
+   1 Dashboard      2 WhatsApp       3 Contacts       4 Settings
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  CONTACTS                INTERESTED              WANT MEETING            BOOKED                  CLIENTS
+  0                       0                       0                       0                       0
+
+  Sent 0  ·  Replies 0  ·  Drafts 0  ·  Follow-ups due 0  ·  Agent active 0.00h
+
+  RECENT ACTIVITY
+
+  13:26:01  Agent settings updated. In-flight drafts require fresh review.
+  13:26:01  Oracle Leads started. Outreach is paused.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  C Chat with Oracle  ·  M Meetings  ·  H Previous runs
+
+
+  Provider check: Synthetic provider fixture.
+  1–4 pages  ·  Space start/pause agent  ·  R refresh  ·  Q quit
+
+
+=== SYNTHETIC relationship ===
+
+  Fixture One  /  +12025550101
+  Synthetic Brokerage · meeting_booked
+
+  Scope: ACTIVE · Permission: yes · Replies: agent
+  A Access  ·  P Takeover  ·  E Edit  ·  S Stage  ·  N Memory  ·  M Meeting
+  G Generate opener · W Write · J Drafts · O Opt-out · D Delete · Esc Back
+
+  Memory (operator): Persistent fixture memory
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Local meeting saved. No external calendar invitation was sent.
+  ↑/↓ scroll · B Meeting records · F Follow-up link · V Inspect/correct memories
+
+
+=== SYNTHETIC dashboard-chat ===
+
+  ORACLE  /  Workspace conversation
+
+  C Ask a question  ·  ↑/↓ Scroll  ·  Esc Back
+
+  You: What happened in the previous run?
+
+  Oracle: Fixture summary: 2 contacts and 1 booked meetings.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Oracle answered. Open dashboard chat to read it.
+
+
+
+=== SYNTHETIC settings ===
+
+  ◈ ORACLE LEADS                                                                        CODEX  ·  PAUSED
+
+   1 Dashboard      2 WhatsApp       3 Contacts       4 Settings
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  WORKSPACE SETTINGS
+
+  P Provider                     codex
+  S Sales instructions           You are Oracle Leads, the Atlas relationship assistant for Bismyth. Be warm, hon
+  K Atlas knowledge              Atlas supports lead intake, ownership and follow-ups, site visits, communication
+  A Reply mode                   review
+  D Daily send limit             30
+  T Quiet hours (local time)     00:00–00:00
+  M Meeting link                 Not configured
+  Y Successful meeting link      Not configured
+  N Unsuccessful meeting link    Not configured
+  F Model override               Provider default
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  V Verify provider  ·  B Export full memory backup  ·  O Restore backup
+  Contact scope and opt-outs are enforced independently of editable prompts.
+
+  Oracle answered. Open dashboard chat to read it.
+  1–4 pages  ·  Space start/pause agent  ·  R refresh  ·  Q quit
+
+
+=== SYNTHETIC dashboard-sent ===
+
+  ◈ ORACLE LEADS                                                                        CODEX  ·  AGENT RUNNING
+
+   1 Dashboard      2 WhatsApp       3 Contacts       4 Settings
+
+  ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  CONTACTS                INTERESTED              WANT MEETING            BOOKED                  CLIENTS
+  2                       1                       0                       1                       0
+
+  Sent 1  ·  Replies 0  ·  Drafts 0  ·  Follow-ups due 0  ·  Agent active 0.00h
+
+  RECENT ACTIVITY
+
+  13:26:05  Message accepted by WhatsApp transport.
+  13:26:05  Synthetic transport accepted one reviewed message.
+  13:26:05  Agent started for explicitly active contacts.
+  13:26:05  Exact message approved for dispatch.
+  13:26:04  Agent settings updated. In-flight drafts require fresh review.
+  13:26:02  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting record created.
+  13:26:02  Relationship memory saved.
+  13:26:01  Fixture One: relationship or agent access updated.
+  13:26:01  2 contacts imported; 0 duplicates; 0 invalid. All new contacts are inactive.
+  13:26:01  Agent settings updated. In-flight drafts require fresh review.
+
+
+
+
+
+
+
+
+
+
+  C Chat with Oracle  ·  M Meetings  ·  H Previous runs
+  Oracle: Fixture summary: 2 contacts and 1 booked meetings.
+
+  Agent started. Only active, permitted contacts can receive queued messages.
+  1–4 pages  ·  Space start/pause agent  ·  R refresh  ·  Q quit
+
+
+=== SYNTHETIC relationship-after-restart ===
+
+  Fixture One  /  +12025550101
+  Synthetic Brokerage · meeting_booked
+
+  Scope: ACTIVE · Permission: yes · Replies: agent
+  A Access  ·  P Takeover  ·  E Edit  ·  S Stage  ·  N Memory  ·  M Meeting
+  G Generate opener · W Write · J Drafts · O Opt-out · D Delete · Esc Back
+
+  Memory (operator): Persistent fixture memory
+  10-17T13:26 YOU [sent] Synthetic reviewed message
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  Provider check: Synthetic provider fixture.
+  ↑/↓ scroll · B Meeting records · F Follow-up link · V Inspect/correct memories
