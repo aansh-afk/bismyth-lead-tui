@@ -33,9 +33,9 @@ Click navigation, contact rows, action buttons, menu options, confirmations and 
 
 The primary installed command is `~/.local/bin/bismyth-leads`. Optional local Oracle aliases open the same outreach app. Use a terminal at least **80×24** for normal operation. A WhatsApp QR can require about **80×46**; its page reports the actual minimum dimensions. Shrink the terminal font or enlarge the window to scan it.
 
-## Four pages
+## Five pages
 
-Use **1–4** to switch pages, **Space** to start/pause the worker, **R** to refresh, and **Q** to quit. Escape returns from a view. Single-line forms save with Enter; multi-line editors save with **Ctrl+S**, **Ctrl+G**, or the Save button. **Ctrl+U** clears a field.
+Use **1–5** to switch pages, **Space** to start/pause the worker, **R** to refresh, and **Q** to quit. Escape returns from a view. Single-line forms save with Enter; multi-line editors save with **Ctrl+S**, **Ctrl+G**, or the Save button. **Ctrl+U** clears a field.
 
 ### 1 — Dashboard
 
@@ -137,7 +137,7 @@ The former engine is retained in `engine.py` for configuration compatibility and
 ## Install the release
 
 ```sh
-ONNXRUNTIME_NODE_INSTALL=skip npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.4.1/bismyth-lead-tui-0.4.1.tgz
+ONNXRUNTIME_NODE_INSTALL=skip npm install --global --prefix "$HOME/.local" https://github.com/aansh-afk/bismyth-lead-tui/releases/download/v0.5.0/bismyth-lead-tui-0.5.0.tgz
 bismyth-leads
 ```
 
@@ -156,6 +156,21 @@ The v0.1.x property-enquiry implementation remains in `src/`; its historical gui
 Settings → Response timing defaults to a **5–15 second pause before composing and between automatic sends**; model generation time is additional. Set both values to zero for immediate processing. Incoming responses take priority over introductions. Quiet hours and the daily cap still delay dispatch. Each launch begins paused until you press Start Agent.
 
 Context is contact-specific and bounded to recent conversation and stored memory; it does not import the full WhatsApp message archive. Saved stages and messages are the source of truth for prior contact. Starting does not create external calendar bookings or invent follow-up dates. Legacy draft APIs remain for compatibility and are not part of the autonomous UI flow.
+
+## 5 — Sources (Firecrawl)
+
+Press **5** or click **Sources**. Choose **Configure** to enter your Firecrawl API key in a masked field, or set `FIRECRAWL_API_KEY` before launching. The saved key is private to the local workspace (`firecrawl.key`, mode 0600), outside the database and exports. Blank removes a locally saved key. **Credits** checks the account's current balance; the page labels the cached value as last checked credits.
+
+- **Search web** finds public business sources using a query, location, country and result limit.
+- **Scrape URL** fetches one page and extracts public phone/email evidence, including footer/contact information.
+- **Crawl site** follows pages across the selected website with a 1–100 page limit (default 10). External domains and arbitrary subdomains are excluded; canonical www redirects are accepted. **Runs** shows progress, reported credit usage, errors and cancellation. Existing saved jobs resume status checks after app restart; a lost start response is not retried automatically. Crawls started in Firecrawl can continue while Oracle is closed.
+- Select a source to preview its URL, content and contact evidence. **Import phones** lets you choose individual candidates and edit the business/contact name. New leads enter Contacts inactive and without outreach permission. Existing phone records keep their stage, sender and permissions. Emails remain research records; the WhatsApp CRM needs a phone number.
+
+International `+country-code` numbers and phone/WhatsApp links are retained. Indian or North American local ten-digit phone numbers are normalized only when the corresponding calling code is explicitly selected and phone context is present. Other ambiguous local numbers are skipped. Extraction validates number format, not ownership or whether a number has WhatsApp. Sources and research runs persist in SQLite and relationship backups; restored crawl jobs are interrupted and do not resume remote activity.
+
+Search, scrape and crawl requests use your Firecrawl account credits when you initiate them. No research runs automatically with Start Agent. Crawl polling and page saving continue independently of outreach quiet hours. Research does not enable messaging. The primary native TUI has all five pages; hidden legacy curses mode retains its original four-page interface.
+
+Official API references: [Search](https://docs.firecrawl.dev/api-reference/endpoint/search), [Scrape](https://docs.firecrawl.dev/api-reference/endpoint/scrape), [Crawl](https://docs.firecrawl.dev/api-reference/endpoint/crawl-post), [Crawl status](https://docs.firecrawl.dev/api-reference/endpoint/crawl-get), [Credit usage](https://docs.firecrawl.dev/api-reference/endpoint/credit-usage). See [Sources verification](leads/docs/verification-sources-2026-10-17.md) for test methods and live-service limits.
 
 ## Local Laya decisions
 

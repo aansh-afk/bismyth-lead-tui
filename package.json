@@ -1,6 +1,6 @@
 {
   "name": "bismyth-lead-tui",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "Oracle Leads: terminal outreach and relationship workspace with scoped WhatsApp and persistent memory",
   "license": "(MIT AND Apache-2.0)",
   "repository": {

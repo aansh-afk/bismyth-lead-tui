@@ -1,4 +1,5 @@
 // Local-only synthetic transport for the terminal smoke test. Never used by production.
+import { Sources } from "../server/sources.mjs";
 import { createApp } from "../server/index.mjs";
 if (process.env.ORACLE_LEADS_FIXTURE !== "1")
   throw new Error("Explicit fixture mode required.");
@@ -8,6 +9,12 @@ let pairingState=reloginFixture ? {status:"logged_out",phone:null,error:"Session
 let app;
 app = await createApp({
   dataDir: process.env.ORACLE_LEADS_DATA,
+  sourcesFactory: process.env.ORACLE_LEADS_SOURCES_FIXTURE==="1" ? store=>new Sources(store,{env:{},fetcher:async(url,options)=>{
+    const p={markdown:"# Fixture Brokerage\nCall +91 98765 43210\nEmail owner@fixture.example.test",links:["tel:+919876543210"],metadata:{sourceURL:"https://fixture.example.test/contact",title:"Fixture Brokerage"}};
+    const result=url.endsWith('/search')?{success:true,creditsUsed:2,data:{web:[{url:p.metadata.sourceURL,title:'Fixture Brokerage',description:'Synthetic public business source'}]}}:url.endsWith('/scrape')?{success:true,data:p}:url.endsWith('/team/credit-usage')?{success:true,data:{remainingCredits:1000}}:url.endsWith('/crawl')?{success:true,id:'fixture-crawl'}:options.method==='DELETE'?{success:true}:{status:'completed',total:2,completed:2,creditsUsed:2,data:[p,{...p,metadata:{sourceURL:'https://fixture.example.test/about',title:'Fixture About'}}]};
+    return new Response(JSON.stringify(result),{status:200});
+  }}) : undefined,
+
   modelFactory: () => ({
     status: async () => ({
       provider: "codex",

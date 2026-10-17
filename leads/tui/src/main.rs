@@ -199,8 +199,12 @@ fn event_loop(
                         let list_hit = app.hits.iter().any(|(r, h)| {
                             matches!(h, Hit::List) && r.contains((mouse.column, mouse.row).into())
                         });
-                        if list_hit && matches!(app.page, 1 | 2) {
-                            let count = app.contacts().len();
+                        if list_hit && matches!(app.page, 1 | 2 | 4) {
+                            let count = if app.page == 4 {
+                                app.source_pages().len()
+                            } else {
+                                app.contacts().len()
+                            };
                             if count > 0 {
                                 app.select(if up {
                                     app.row.saturating_sub(1)
@@ -220,7 +224,9 @@ fn event_loop(
                             } else {
                                 &mut app.thread_scroll
                             };
-                            let backwards = if matches!(app.page, 1 | 2) && app.detail_tab != 1 {
+                            let backwards = if app.page == 4
+                                || (matches!(app.page, 1 | 2) && app.detail_tab != 1)
+                            {
                                 !up
                             } else {
                                 up
@@ -389,7 +395,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         return;
     }
     match key.code {
-        KeyCode::Char(c) if ('1'..='4').contains(&c) => app.page(c as usize - '1' as usize),
+        KeyCode::Char(c) if ('1'..='5').contains(&c) => app.page(c as usize - '1' as usize),
         KeyCode::Char('q') => app.quit = true,
         KeyCode::Char('?') => app.modal = Some(Modal::Help),
         KeyCode::Char(' ') => app.perform(Action::new("toggle-agent", Value::Null)),
@@ -397,14 +403,14 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Tab => {
             if app.page == 0 {
                 app.composer_focus = true;
-            } else if matches!(app.page, 1 | 2) {
+            } else if matches!(app.page, 1 | 2 | 4) {
                 app.open_contact_actions();
             }
         }
         KeyCode::Up => {
             if app.page == 3 {
                 app.settings_row = app.settings_row.saturating_sub(1);
-            } else if matches!(app.page, 1 | 2) {
+            } else if matches!(app.page, 1 | 2 | 4) {
                 app.select(app.row.saturating_sub(1));
             } else {
                 app.chat_scroll += 2;
@@ -413,8 +419,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         KeyCode::Down => {
             if app.page == 3 {
                 app.settings_row = (app.settings_row + 1).min(app.settings().len() - 1);
-            } else if matches!(app.page, 1 | 2) {
-                let count = app.contacts().len();
+            } else if matches!(app.page, 1 | 2 | 4) {
+                let count = if app.page == 4 {
+                    app.source_pages().len()
+                } else {
+                    app.contacts().len()
+                };
                 if count > 0 {
                     app.select((app.row + 1).min(count - 1));
                 }
@@ -426,7 +436,7 @@ fn handle_key(app: &mut App, key: KeyEvent) {
             if app.page == 3 {
                 let key = app.settings()[app.settings_row].2;
                 app.setting(key);
-            } else if matches!(app.page, 1 | 2) {
+            } else if matches!(app.page, 1 | 2 | 4) {
                 app.open_contact_actions();
             } else {
                 app.composer_focus = true;
@@ -466,6 +476,12 @@ fn handle_key(app: &mut App, key: KeyEvent) {
         }
         KeyCode::Char('p') if matches!(app.page, 1 | 2) => {
             app.perform(Action::new("takeover", Value::Null))
+        }
+        KeyCode::Char('s') if app.page == 4 => {
+            app.perform(Action::new("source-search", Value::Null))
+        }
+        KeyCode::Char('i') if app.page == 4 => {
+            app.perform(Action::new("source-contacts", Value::Null))
         }
         KeyCode::Char('v') if app.page == 3 => app.perform(Action::new("verify", Value::Null)),
         KeyCode::Char('b') if app.page == 3 => app.perform(Action::new("backup", Value::Null)),

@@ -16,6 +16,7 @@ import { Store, text } from "./store.mjs";
 import { Model } from "./model.mjs";
 import { WhatsApp } from "./transport.mjs";
 import { Agent } from "./agent.mjs";
+import { Sources } from "./sources.mjs";
 import { csvRows, csvExport, legacyRows, loadSavedDirectory } from "./import.mjs";
 export async function createApp({
   dataDir = process.env.ORACLE_LEADS_DATA ||
@@ -24,6 +25,7 @@ export async function createApp({
   savedContactsLoader = legacyRows,
   modelFactory = (s) => new Model(s),
   transportFactory = (s, receive) => new WhatsApp(s, receive),
+  sourcesFactory = (s) => new Sources(s),
 } = {}) {
   process.umask(0o077);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
@@ -60,6 +62,7 @@ export async function createApp({
   const store = new Store(join(dataDir, "oracle-leads.sqlite"));
   if(loadSavedContacts) await loadSavedDirectory(store,savedContactsLoader);
   const model = modelFactory(store);
+  const sources = sourcesFactory(store);
   let agent;
   const transport = transportFactory(store, (e) => agent.receive(e));
   agent = new Agent(store, model, transport);
@@ -115,8 +118,10 @@ export async function createApp({
             agent_busy: agent.busy,
             agent_status: agent.status(),
             decisions: model.decisions?.status() || null,
+            sources: sources.state(),
           });
         if (path === "/api/provider") return send(200, await model.status());
+        if (path.startsWith("/api/source/")) return send(200,sources.detail(path.split("/").pop()));
         if (path.startsWith("/api/contact/"))
           return send(200, store.detail(path.split("/").pop()));
         if (path === "/api/export") return send(200, store.backup());
@@ -145,6 +150,14 @@ export async function createApp({
         }
       }
       const body = JSON.parse(raw || "{}");
+      if (path === "/api/sources/key") return send(200,sources.setKey(body.api_key));
+      if (path === "/api/sources/credits") return send(200,await sources.credits());
+      if (path === "/api/sources/search") return send(200,await sources.start("search",body));
+      if (path === "/api/sources/scrape") return send(200,await sources.start("scrape",body));
+      if (path === "/api/sources/crawl") return send(200,await sources.start("crawl",body));
+      if (path === "/api/sources/cancel") return send(200,await sources.cancel(body.id));
+      if (path === "/api/sources/refresh") { await sources.poll();return send(200,{ok:true}); }
+      if (path === "/api/sources/import") return send(200,sources.importContact(body));
       if (path === "/api/agent/start") return send(200,agent.start());
       if (path === "/api/agent/pause") return send(200,agent.pause());
       if (path === "/api/settings") return send(200, store.saveSettings(body));
@@ -348,6 +361,7 @@ export async function createApp({
   }, 3600000);
   const worker = setInterval(() => agent.tick().catch(() => {}), 1200),
     heartbeat = setInterval(() => store.heartbeat(), 5000);
+  const sourceWorker = setInterval(() => sources.poll().catch(() => {}),5000);
   // Reuse an explicitly linked account; the store keeps outreach paused on startup.
   void transport.resumeSession?.().catch(() => {});
   return {
@@ -356,9 +370,12 @@ export async function createApp({
     store,
     agent,
     transport,
+    sources,
     close: async () => {
       agent.stopping = true;
       clearInterval(worker);
+      clearInterval(sourceWorker);
+      sources.close();
       clearInterval(heartbeat);
       clearInterval(backupTimer);
       model.cancel?.();

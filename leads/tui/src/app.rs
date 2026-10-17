@@ -140,6 +140,7 @@ pub struct Field {
     pub label: String,
     pub edit: Editor,
     pub multiline: bool,
+    pub secret: bool,
 }
 impl Field {
     pub fn new(label: &str, value: &str, multiline: bool) -> Self {
@@ -147,7 +148,13 @@ impl Field {
             label: label.into(),
             edit: Editor::new(value),
             multiline,
+            secret: false,
         }
+    }
+    pub fn secret(label: &str) -> Self {
+        let mut field = Self::new(label, "", false);
+        field.secret = true;
+        field
     }
 }
 #[derive(Clone)]
@@ -342,7 +349,11 @@ impl App {
         match self.api.get("/api/state") {
             Ok(v) => {
                 self.state = v;
-                let rows = self.contacts();
+                let rows = if self.page == 4 {
+                    self.source_pages()
+                } else {
+                    self.contacts()
+                };
                 if let Some(index) = rows.iter().position(|c| strv(c, "id") == self.selected_id) {
                     self.row = index;
                 }
@@ -388,6 +399,22 @@ impl App {
         );
     }
     pub fn refresh_detail(&mut self) {
+        if self.page == 4 {
+            let rows = self.source_pages();
+            if rows.is_empty() {
+                self.detail = Value::Null;
+                self.selected_id.clear();
+                return;
+            }
+            self.row = self.row.min(rows.len() - 1);
+            let id = strv(&rows[self.row], "id");
+            self.selected_id = id.into();
+            match self.api.get(&format!("/api/source/{id}")) {
+                Ok(v) => self.detail = v,
+                Err(e) => self.notice = e,
+            };
+            return;
+        }
         let rows = self.contacts();
         if !rows.is_empty() {
             self.row = self.row.min(rows.len() - 1);
@@ -423,6 +450,34 @@ impl App {
             .collect();
         rows.sort_by_cached_key(|c| (strv(c, "name").to_lowercase(), strv(c, "phone").to_owned()));
         rows
+    }
+    pub fn source_pages(&self) -> Vec<Value> {
+        list(&self.state["sources"], "pages")
+    }
+    pub fn source_actions(&mut self) {
+        if self.detail.is_null() {
+            self.notice = "Search the web or add a website to start collecting sources.".into();
+            return;
+        }
+        let title = format!("{} · source", clip(strv(&self.detail, "title"), 55));
+        self.menu(
+            &title,
+            "Research is saved locally. Importing a contact leaves outreach inactive.",
+            vec![
+                (
+                    "Inspect / refresh this page",
+                    Action::new("source-scrape-selected", Value::Null),
+                ),
+                (
+                    "Crawl this website",
+                    Action::new("source-crawl-selected", Value::Null),
+                ),
+                (
+                    "Import phone contacts",
+                    Action::new("source-contacts", Value::Null),
+                ),
+            ],
+        );
     }
     pub fn contact(&self) -> Value {
         self.detail["contact"].clone()
@@ -506,6 +561,10 @@ impl App {
         self.chat_scroll = 0;
     }
     pub fn open_contact_actions(&mut self) {
+        if self.page == 4 {
+            self.source_actions();
+            return;
+        }
         let c = self.contact();
         if c.is_null() {
             return;
@@ -804,6 +863,17 @@ impl App {
             "runs"=>self.owned_menu("Previous runs","Agent runtime is measured separately from paused/offline time.",list(&self.state,"runs").into_iter().map(|r|(format!("{}  {}  ·  {:.1} min active",clip(strv(&r,"started_at"),19),strv(&r,"status"),r["active_seconds"].as_f64().unwrap_or(0.0)/60.0),Action::new("noop",Value::Null))).collect()),
             "followups"=>{let contacts=list(&self.state,"contacts").into_iter().filter(|c|!strv(c,"next_action").is_empty()||!strv(c,"followup_at").is_empty()).collect::<Vec<_>>();if contacts.is_empty(){self.notice="No follow-up tasks. Add a next action and date from a relationship’s details.".into();}else{self.owned_menu("Relationship follow-ups","Tasks do not automatically authorize messages.",contacts.into_iter().map(|c|(format!("{}  {}  {}",strv(&c,"name"),clip(strv(&c,"followup_at"),16),clip(strv(&c,"next_action"),50)),Action::new("select-id",c["id"].clone()))).collect());}},
             "select-id"=>{self.page(2);if let Some(index)=self.contacts().iter().position(|c|c["id"]==action.data){self.select(index);}},
+            "source-key"=>self.form("Connect Firecrawl","Enter your Firecrawl API key. Input is masked and saved privately outside exports. Blank removes the saved key.","source-key",Value::Null,vec![Field::secret("Firecrawl API key")]),
+            "source-search"=>self.form("Find Atlas prospects","Search public sources. Firecrawl account credits apply; contacts remain inactive until you enable them.","source-search",Value::Null,vec![Field::new("Search query","real estate brokerage owners",false),Field::new("Location","Pune, India",false),Field::new("Country · two letters","IN",false),Field::new("Result limit · 1–100","5",false)]),
+            "source-scrape"|"source-scrape-selected"=>self.form("Inspect a website page","Fetch one page, keep its source URL and extract public phone/email evidence. Firecrawl credits apply.","source-scrape",Value::Null,vec![Field::new("Website URL",if action.name=="source-scrape-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Country calling code for local phones","91",false)]),
+            "source-crawl"|"source-crawl-selected"=>self.form("Crawl a whole website","Follow pages within this website. Set a page limit; Firecrawl credits apply. Progress continues in Research runs.","source-crawl",Value::Null,vec![Field::new("Website URL",if action.name=="source-crawl-selected"{strv(&self.detail,"url")}else{""},false),Field::new("Maximum pages · 1–100","10",false),Field::new("Country calling code for local phones","91",false)]),
+            "source-actions"=>self.source_actions(),
+            "source-select"=>{self.row=action.data.as_u64().unwrap_or(0)as usize;self.thread_scroll=0;self.refresh_detail();},
+            "source-credits"=>self.request("/api/sources/credits",json!({}),"Firecrawl credit balance updated.",""),
+            "source-contacts"=>{let page=self.detail.clone();let rows=list(&page,"candidates");if rows.is_empty(){self.notice="No phone candidates yet. Inspect the page or crawl its contact pages.".into();}else{self.owned_menu("Phone contacts from this source","Select a number to import as an inactive relationship. The source URL is preserved.",rows.into_iter().map(|c|(format!("{}  {}",strv(&c,"phone"),clip(strv(&c,"evidence"),55)),Action::new("source-import",json!({"page_id":page["id"],"phone":c["phone"],"title":page["title"]})))).collect());}},
+            "source-import"=>self.form("Import sourced contact","This creates an inactive lead with its source URL and evidence. Existing phone records keep their stage and permissions.","source-import",action.data.clone(),vec![Field::new("Contact / business name",strv(&action.data,"title"),false),Field::new("Company",strv(&action.data,"title"),false)]),
+            "source-runs"=>self.owned_menu("Research runs","Crawls resume checking the saved job after restart. Select a run for progress or cancellation.",list(&self.state["sources"],"runs").into_iter().map(|r|(format!("{}  {}  {}/{}  {}",strv(&r,"kind"),strv(&r,"status"),num(&r,"completed"),num(&r,"page_limit"),clip(strv(&r,"target"),45)),Action::new("source-run",r))).collect()),
+            "source-run"=>{let r=action.data;let hint=format!("{} · {} / {} pages · credits {}\n{}",strv(&r,"target"),num(&r,"completed"),num(&r,"page_limit"),r["credits"],strv(&r,"error"));let mut items=vec![("Refresh crawl status",Action::new("request",json!({"path":"/api/sources/refresh","body":{},"notice":"Crawl progress checked."})))];if matches!(strv(&r,"status"),"running"|"collecting"){items.push(("Cancel this crawl",Action::new("request",json!({"path":"/api/sources/cancel","body":{"id":r["id"]},"notice":"Crawl cancellation confirmed."}))));}self.menu("Research progress",&hint,items);},
             "help"=>self.modal=Some(Modal::Help),
             "request"=>self.request(strv(&action.data,"path"),action.data["body"].clone(),strv(&action.data,"notice"),strv(&action.data,"next")),
             "export-save"=>self.save_export(strv(&action.data,"path"),action.data["backup"].as_bool().unwrap_or(false)),
@@ -831,6 +901,11 @@ impl App {
         self.modal = None;
         let result = (|| -> Result<(), String> {
             match kind.as_str() {
+                "source-key"=>self.request("/api/sources/key",json!({"api_key":first}),"Firecrawl key configuration saved.",""),
+                "source-search"=>{let limit=values[3].parse::<u32>().map_err(|_|"Enter a whole-number result limit.")?;self.request("/api/sources/search",json!({"query":values[0],"location":values[1],"country":values[2],"limit":limit}),"Search results saved. Select a page to inspect it.","");},
+                "source-scrape"=>self.request("/api/sources/scrape",json!({"url":values[0],"dial_code":values[1]}),"Page saved with public contact evidence.",""),
+                "source-crawl"=>{let limit=values[1].parse::<u32>().map_err(|_|"Enter a whole-number page limit.")?;self.request("/api/sources/crawl",json!({"url":values[0],"limit":limit,"dial_code":values[2]}),"Website crawl started. See Research runs for progress.","");},
+                "source-import"=>self.request("/api/sources/import",json!({"page_id":data["page_id"],"phone":data["phone"],"name":values[0],"company":values[1]}),"Sourced contact imported. New leads are inactive; duplicates keep their existing permissions.",""),
                 "pair-phone" => {
                     if first.is_empty() {
                         return Err("Enter your WhatsApp number including country code.".into());

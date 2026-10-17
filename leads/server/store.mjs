@@ -92,7 +92,10 @@ export class Store {
       CREATE INDEX IF NOT EXISTS jobs_contact_state ON jobs(contact_id,status,created_at DESC);
       CREATE INDEX IF NOT EXISTS jobs_due ON jobs(status,due_at,created_at);
       CREATE INDEX IF NOT EXISTS contacts_scope ON contacts(active,consent,auto_reply,sender);`);
-    this.db.exec("PRAGMA user_version=3");
+    this.db.exec(`CREATE TABLE IF NOT EXISTS source_pages(id TEXT PRIMARY KEY,url TEXT UNIQUE NOT NULL,title TEXT NOT NULL,description TEXT NOT NULL,markdown TEXT NOT NULL,candidates TEXT NOT NULL,emails TEXT NOT NULL,status TEXT NOT NULL,query TEXT NOT NULL,run_id TEXT,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS source_runs(id TEXT PRIMARY KEY,kind TEXT NOT NULL,target TEXT NOT NULL,status TEXT NOT NULL,external_id TEXT,page_limit INTEGER NOT NULL,completed INTEGER NOT NULL DEFAULT 0,total INTEGER NOT NULL DEFAULT 0,credits INTEGER,error TEXT,cursor TEXT NOT NULL DEFAULT '',dial_code TEXT NOT NULL,country TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+      CREATE INDEX IF NOT EXISTS source_pages_updated ON source_pages(updated_at DESC);
+      PRAGMA user_version=4;`);
     if (!this.get("settings")) this.set("settings", defaults);
     this.db
       .prepare(
@@ -614,6 +617,8 @@ export class Store {
       "chat",
       "runs",
       "jobs",
+      "source_pages",
+      "source_runs",
     ];
     return {
       version: 1,
@@ -648,6 +653,8 @@ export class Store {
     if (!backup || backup.version !== 1 || !Array.isArray(backup.contacts))
       throw new Error("Invalid Oracle Leads backup.");
     const tables = {
+      source_pages: ["id","url","title","description","markdown","candidates","emails","status","query","run_id","created_at","updated_at"],
+      source_runs: ["id","kind","target","status","external_id","page_limit","completed","total","credits","error","cursor","dial_code","country","created_at","updated_at"],
       contacts: [
         "id",
         "phone",
@@ -730,6 +737,11 @@ export class Store {
           throw new Error("Invalid backup table.");
         for (const original of rows) {
           const row = { ...original };
+          if (table === "source_runs") {
+            row.status = ["running","collecting","starting"].includes(row.status) ? "interrupted" : row.status;
+            row.external_id = null;
+            row.cursor = "";
+          }
           if (table === "contacts") {
             row.phone = phone(row.phone);
             if (!STAGES.includes(row.stage))

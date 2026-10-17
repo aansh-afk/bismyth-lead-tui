@@ -174,6 +174,7 @@ fn nav(f: &mut Frame, app: &mut App, area: Rect, wide: bool) {
         ("02", "WhatsApp", "Scoped inbox"),
         ("03", "Contacts", "People & memory"),
         ("04", "Settings", "Agent settings"),
+        ("05", "Sources", "Find prospects"),
     ];
     if wide {
         let rail = Block::default()
@@ -186,7 +187,7 @@ fn nav(f: &mut Frame, app: &mut App, area: Rect, wide: bool) {
         label(f, rect(area.x + 5, area.y + 3, 16, 1), VERSION, MUTED);
         label(f, rect(area.x + 2, area.y + 5, 18, 1), "WORKSPACE", MUTED);
         for (i, (number, name, description)) in pages.iter().enumerate() {
-            let y = area.y + 7 + i as u16 * 3;
+            let y = area.y + 7 + i as u16 * if area.height < 23 { 2 } else { 3 };
             let r = rect(area.x + 1, y, area.width - 2, 2);
             if i == app.page {
                 f.render_widget(Block::default().style(Style::default().bg(SELECTED)), r);
@@ -201,7 +202,7 @@ fn nav(f: &mut Frame, app: &mut App, area: Rect, wide: bool) {
             app.hits
                 .push((r, Hit::Action(Action::new("page", json!(i)))));
         }
-        if area.height > 27 {
+        if area.height > 32 {
             let y = area.bottom() - 10;
             label(f, rect(area.x + 2, y, 18, 1), "MODEL", MUTED);
             label(
@@ -230,14 +231,16 @@ fn nav(f: &mut Frame, app: &mut App, area: Rect, wide: bool) {
                 },
             );
         }
-        label(
-            f,
-            rect(area.x + 2, area.bottom() - 3, 18, 1),
-            "bismyth-leads",
-            MUTED,
-        );
+        if area.height > 25 {
+            label(
+                f,
+                rect(area.x + 2, area.bottom() - 3, 18, 1),
+                "bismyth-leads",
+                MUTED,
+            );
+        }
     } else {
-        let width = (area.width / 4).max(1);
+        let width = (area.width / 5).max(1);
         for (i, (_, name, _)) in pages.iter().enumerate() {
             let r = rect(area.x + i as u16 * width, area.y, width, 2);
             f.render_widget(
@@ -298,6 +301,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         "WhatsApp workspace",
         "People & memory",
         "Workspace settings",
+        "Prospect sources",
     ][app.page];
     label(
         f,
@@ -346,7 +350,8 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     match app.page {
         0 => dashboard(f, app, content),
         1 | 2 => contacts(f, app, content),
-        _ => settings(f, app, content),
+        3 => settings(f, app, content),
+        _ => sources(f, app, content),
     }
     let footer = layout[3];
     f.render_widget(
@@ -392,7 +397,7 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         } else if app.composer_focus {
             "Enter send question · Esc leave composer · Tab focus · Mouse click & scroll"
         } else {
-            "1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit"
+            "1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit"
         },
         MUTED,
     );
@@ -1077,6 +1082,156 @@ fn contacts(f: &mut Frame, app: &mut App, area: Rect) {
         false,
     );
 }
+fn sources(f: &mut Frame, app: &mut App, area: Rect) {
+    let parts = Layout::vertical([
+        Constraint::Length(5),
+        Constraint::Min(5),
+        Constraint::Length(2),
+    ])
+    .split(area);
+    let info = app.state["sources"].clone();
+    let mut x = parts[0].x;
+    let mut y = parts[0].y;
+    for (title, action) in [
+        ("Search web", "source-search"),
+        ("Scrape URL", "source-scrape"),
+        ("Crawl site", "source-crawl"),
+        ("Configure", "source-key"),
+        ("Runs", "source-runs"),
+        ("Credits", "source-credits"),
+    ] {
+        if x + title.len() as u16 + 4 > parts[0].right() {
+            x = parts[0].x;
+            y += 2;
+        }
+        x = button(f, app, x, y, title, Action::new(action, Value::Null), false);
+    }
+    label(
+        f,
+        rect(parts[0].x, parts[0].bottom() - 1, parts[0].width, 1),
+        format!(
+            "Firecrawl {} · {} sources · last credits {}{}",
+            if info["configured"].as_bool().unwrap_or(false) {
+                "configured"
+            } else {
+                "needs API key"
+            },
+            num(&info, "count"),
+            info["balance"]["remaining"]
+                .as_i64()
+                .map(|n| n.to_string())
+                .unwrap_or("not checked".into()),
+            if info["busy"].as_bool().unwrap_or(false) {
+                " · researching…"
+            } else {
+                ""
+            }
+        ),
+        MUTED,
+    );
+    let panes = if area.width >= 95 {
+        Layout::horizontal([Constraint::Percentage(42), Constraint::Percentage(58)])
+            .spacing(1)
+            .split(parts[1])
+    } else {
+        Layout::vertical([Constraint::Percentage(45), Constraint::Percentage(55)]).split(parts[1])
+    };
+    let left = panel(f, panes[0], "SAVED SOURCES");
+    let right = panel(f, panes[1], "SOURCE & CONTACT EVIDENCE");
+    app.hits.push((left, Hit::List));
+    let pages = app.source_pages();
+    if pages.is_empty() {
+        label(
+            f,
+            inset(left, 1, 1),
+            "Find brokerage owners and businesses.\n\nSearch the web, scrape a URL or crawl a website. Your sources stay here between runs.",
+            MUTED,
+        );
+    } else {
+        let rows = left.height as usize;
+        let start = app.row.saturating_sub(rows.saturating_sub(1));
+        for (i, p) in pages.iter().enumerate().skip(start).take(rows) {
+            let row = rect(left.x, left.y + (i - start) as u16, left.width, 1);
+            label(
+                f,
+                row,
+                format!(
+                    "{} {} · {}",
+                    if i == app.row { "›" } else { " " },
+                    strv(p, "title"),
+                    strv(p, "status")
+                ),
+                if i == app.row { ACCENT } else { FG },
+            );
+            app.hits.push((row, Hit::Contact(i)));
+        }
+    }
+    if app.detail.is_null() {
+        label(
+            f,
+            inset(right, 1, 1),
+            "Select a source to see its URL, page content and public phone/email evidence.",
+            MUTED,
+        );
+    } else {
+        let p = &app.detail;
+        let candidates = list(p, "candidates");
+        let emails = list(p, "emails");
+        let mut content = format!(
+            "{}\n{}\n{} · {}\n\n{}\n\nPHONE CONTACTS\n",
+            strv(p, "title"),
+            strv(p, "url"),
+            strv(p, "status"),
+            clip(strv(p, "updated_at"), 16),
+            strv(p, "description")
+        );
+        if candidates.is_empty() {
+            content.push_str("No verified-format phone candidates yet. Inspect the page or crawl its contact pages.\n");
+        }
+        for c in candidates {
+            content.push_str(&format!(
+                "{}  {}\n",
+                strv(&c, "phone"),
+                strv(&c, "evidence")
+            ));
+        }
+        if !emails.is_empty() {
+            content.push_str("\nEMAILS\n");
+            for e in emails {
+                content.push_str(e.as_str().unwrap_or(""));
+                content.push('\n');
+            }
+        }
+        content.push_str("\nPAGE CONTENT\n");
+        content.push_str(&clip(strv(p, "markdown"), 20000));
+        let lines = wrap(&content, right.width.saturating_sub(2) as usize);
+        f.render_widget(
+            Paragraph::new(lines.into_iter().map(Line::from).collect::<Vec<_>>())
+                .scroll((app.thread_scroll.min(u16::MAX as usize) as u16, 0))
+                .style(Style::default().fg(FG)),
+            inset(right, 1, 0),
+        );
+        app.hits.push((right, Hit::Transcript));
+    }
+    let x = button(
+        f,
+        app,
+        parts[2].x,
+        parts[2].y,
+        "Actions",
+        Action::new("source-actions", Value::Null),
+        false,
+    );
+    button(
+        f,
+        app,
+        x,
+        parts[2].y,
+        "Import phones",
+        Action::new("source-contacts", Value::Null),
+        true,
+    );
+}
 fn settings(f: &mut Frame, app: &mut App, area: Rect) {
     let parts = Layout::vertical([
         Constraint::Length(2),
@@ -1301,7 +1456,11 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                 let input = block.inner(row);
                 f.render_widget(block, row);
                 let width = input.width.saturating_sub(2) as usize;
-                let (lines, cursor, _) = field.edit.wrapped(width);
+                let mut display = field.edit.clone();
+                if field.secret {
+                    display.value.fill('*');
+                }
+                let (lines, cursor, _) = display.wrapped(width);
                 let offset = cursor
                     .0
                     .saturating_sub(input.height.saturating_sub(1) as usize);
@@ -1342,6 +1501,16 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
                     "Save draft"
                 } else if kind == "pair-phone" {
                     "Get code"
+                } else if kind == "source-search" {
+                    "Search"
+                } else if kind == "source-scrape" {
+                    "Scrape"
+                } else if kind == "source-crawl" {
+                    "Start crawl"
+                } else if kind == "source-key" {
+                    "Save key"
+                } else if kind == "source-import" {
+                    "Import"
                 } else if kind == "write" {
                     "Send"
                 } else {
@@ -1414,7 +1583,7 @@ fn modal(f: &mut Frame, app: &mut App, area: Rect) {
             );
         }
         Modal::Help => {
-            let text = "01 Dashboard   Live analytics, activity and permanent operator chat\n02 WhatsApp    Pair your number and manage scoped conversations\n03 Contacts    Import, export, memory, meetings and next steps\n04 Settings    Model, prompts, safeguards and backups\n\nMouse: click navigation, rows, actions and fields; wheel to scroll.\nKeyboard: 1–4 pages · ↑↓ select · Enter actions · Space agent\nTab focus · / search · C chat · M meetings · H previous runs\nEditors: Ctrl+S or Ctrl+G save · Ctrl+U clear · Esc cancel\n\nModel integration: Codex CLI or your self-hosted endpoint.\nTerminal stack: Ratatui + Crossterm, also used by OpenAI Codex.\nThis is a dedicated outreach interface, not a coding session.";
+            let text = "01 Dashboard   Live analytics, activity and permanent operator chat\n02 WhatsApp    Pair your number and manage scoped conversations\n03 Contacts    Import, export, memory, meetings and next steps\n04 Settings    Model, prompts, safeguards and backups\n05 Sources     Firecrawl search, scrape and website crawls\n\nMouse: click navigation, rows, actions and fields; wheel to scroll.\nKeyboard: 1–5 pages · ↑↓ select · Enter actions · Space agent\nTab focus · / search · C chat · M meetings · H previous runs\nEditors: Ctrl+S or Ctrl+G save · Ctrl+U clear · Esc cancel\n\nModel integration: Codex CLI or your self-hosted endpoint.\nTerminal stack: Ratatui + Crossterm, also used by OpenAI Codex.\nThis is a dedicated outreach interface, not a coding session.";
             f.render_widget(
                 Paragraph::new(text)
                     .style(Style::default().fg(FG))

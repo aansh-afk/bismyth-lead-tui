@@ -2,7 +2,7 @@
                       │  Relationship overview                                                                                   ▶ Start agent         ?
   ◈  ORACLE           │
      L E A D S        │
-                      │  ╭ RELATIONSHIPS ─────────╮ ╭ INTERESTED ────────────╮ ╭ WANT A MEETING ───────╮ ╭ BOOKED ────────────────╮ ╭ CLIENTS ───────────────╮
+     v0.4.1           │  ╭ RELATIONSHIPS ─────────╮ ╭ INTERESTED ────────────╮ ╭ WANT A MEETING ───────╮ ╭ BOOKED ────────────────╮ ╭ CLIENTS ───────────────╮
                       │  │ 0                      │ │ 0                      │ │ 0                     │ │ 0                      │ │ 0                      │
   WORKSPACE           │  │                        │ │                        │ │                       │ │                        │ │                        │
                       │  │ in your workspace      │ │ positive responses     │ │ awaiting next step    │ │ local meetings         │ │ relationship stage     │
@@ -10,16 +10,16 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 actions underway  ·  0.0 min active  ·  Agent paused
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 15:16  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
+      Scoped inbox    │  │ 16:40  Agent settings updated. In-flight drafts require fresh  │ │ Your memory, one conversation away.                            │
                       │  │                                                                │ │                                                                │
-  03  Contacts        │  │ 15:16  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
+  03  Contacts        │  │ 16:40  Oracle Leads started. Outreach is paused.               │ │ Ask what happened last run, who wants a meeting, or what you   │
       People & memory │  │                                                                │ │ promised a client.                                             │
                       │  │                                                                │ │                                                                │
   04  Settings        │  │                                                                │ │                                                                │
       Agent settings  │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │                                                                │ │                                                                │
-                      │  │                                                                │ │                                                                │
+  05  Sources         │  │                                                                │ │                                                                │
+      Find prospects  │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
@@ -42,13 +42,13 @@
                       │  ╰────────────────────────────────────────────────────────────────╯ ╰────────────────────────────────────────────────────────────────╯
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Your relationship memory is local. Outreach starts paused.
-  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
+  1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
 
 === SYNTHETIC contacts ===
                       │  People & memory                                                                                         ▶ Start agent         ?
   ◈  ORACLE           │
      L E A D S        │
-                      │    Import     Export     Find     Older runs     Refresh WhatsApp
+     v0.4.1           │    Import     Export     Find     Older runs     Refresh WhatsApp
                       │  Saved leads + WhatsApp contacts · 0 shared by WhatsApp · Listing does not enable outreach
   WORKSPACE           │
                       │   Search name, phone, company…  /                                                                                              Clear
@@ -64,8 +64,8 @@
   04  Settings        │  │  Fixture 04    +12025550004     Synthetic Bro new          listed only│ │ ACCESS                                                  │
       Agent settings  │  │  Fixture 05    +12025550005     Synthetic Bro new          listed only│ │ Enabled · sender permission recorded                    │
                       │  │  Fixture 06    +12025550006     Synthetic Bro new          listed only│ │                                                         │
-                      │  │  Fixture 07    +12025550007     Synthetic Bro new          listed only│ │ NEXT ACTION                                             │
-                      │  │  Fixture 08    +12025550008     Synthetic Bro new          listed only│ │ No next action recorded                                 │
+  05  Sources         │  │  Fixture 07    +12025550007     Synthetic Bro new          listed only│ │ NEXT ACTION                                             │
+      Find prospects  │  │  Fixture 08    +12025550008     Synthetic Bro new          listed only│ │ No next action recorded                                 │
                       │  │  Fixture 09    +12025550009     Synthetic Bro new          listed only│ │                                                         │
                       │  │  Fixture 10    +12025550010     Synthetic Bro new          listed only│ │ SOURCE                                                  │
                       │  │  Fixture 11    +12025550011     Synthetic Bro new          listed only│ │ Import                                                  │
@@ -88,13 +88,13 @@
                       │  ╰───────────────────────────────────────────────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Permanent relationship memory saved.
-  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
+  1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
 
 === SYNTHETIC chat ===
                       │  Relationship overview                                                                                   ▶ Start agent         ?
   ◈  ORACLE           │
      L E A D S        │
-                      │  ╭ RELATIONSHIPS ─────────╮ ╭ INTERESTED ────────────╮ ╭ WANT A MEETING ───────╮ ╭ BOOKED ────────────────╮ ╭ CLIENTS ───────────────╮
+     v0.4.1           │  ╭ RELATIONSHIPS ─────────╮ ╭ INTERESTED ────────────╮ ╭ WANT A MEETING ───────╮ ╭ BOOKED ────────────────╮ ╭ CLIENTS ───────────────╮
                       │  │ 40                     │ │ 1                      │ │ 0                     │ │ 1                      │ │ 0                      │
   WORKSPACE           │  │                        │ │                        │ │                       │ │                        │ │                        │
                       │  │ in your workspace      │ │ positive responses     │ │ awaiting next step    │ │ local meetings         │ │ relationship stage     │
@@ -102,19 +102,19 @@
       Overview & chat │  0 sent  ·  0 replies  ·  0 actions underway  ·  0.0 min active  ·  Agent paused
                       │
   02  WhatsApp        │  ╭ RECENT ACTIVITY ───────────────────────────────────────────────╮ ╭ ORACLE  /  YOUR WORKSPACE ASSISTANT ───────────────────────────╮
-      Scoped inbox    │  │ 15:16  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  15:16                                                     │
+      Scoped inbox    │  │ 16:40  Fixture demo: 2030-01-01T04:30:00.000Z. Local meeting r │ │ YOU  16:40                                                     │
                       │  │                                                                │ │ What happened last run?                                        │
-  03  Contacts        │  │ 15:16  Fixture 01: relationship or agent access updated.       │ │                                                                │
-      People & memory │  │                                                                │ │ ORACLE  15:16                                                  │
-                      │  │ 15:16  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
+  03  Contacts        │  │ 16:40  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      People & memory │  │                                                                │ │ ORACLE  16:40                                                  │
+                      │  │ 16:40  Relationship memory saved.                              │ │ Fixture summary: 40 contacts and 1 booked meetings.            │
   04  Settings        │  │                                                                │ │                                                                │
-      Agent settings  │  │ 15:16  Fixture 01: relationship or agent access updated.       │ │                                                                │
+      Agent settings  │  │ 16:40  Fixture 01: relationship or agent access updated.       │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 15:16  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
+  05  Sources         │  │ 16:40  40 contacts imported; 0 duplicates; 0 invalid. All new  │ │                                                                │
+      Find prospects  │  │                                                                │ │                                                                │
+                      │  │ 16:40  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
                       │  │                                                                │ │                                                                │
-                      │  │ 15:16  Agent settings updated. In-flight drafts require fresh  │ │                                                                │
-                      │  │                                                                │ │                                                                │
-                      │  │ 15:16  Oracle Leads started. Outreach is paused.               │ │                                                                │
+                      │  │ 16:40  Oracle Leads started. Outreach is paused.               │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
                       │  │                                                                │ │                                                                │
@@ -140,7 +140,7 @@
                       │  WhatsApp workspace                                                                                      Ⅱ Pause agent         ?
   ◈  ORACLE           │
      L E A D S        │
-                      │    Connect / QR     Enter phone number     Disconnect     Unlink
+     v0.4.1           │    Connect / QR     Enter phone number     Disconnect     Unlink
                       │  CONNECTED  +12025550199 · Autonomous · listening for new messages
   WORKSPACE           │
                       │   Search name, phone, company…  /                                                                                              Clear
@@ -153,19 +153,19 @@
   03  Contacts        │  │  Fixture 01                                   │ ╰─────────────────────────────────────────────────────────────────────────────────╯
       People & memory │  │  +12025550001                                 │   Overview     Chat     Memory
                       │  │› Fixture 02                                   │ ╭ CONVERSATION ───────────────────────────────────────────────────────────────────╮
-  04  Settings        │  │  +12025550002                                 │ │ YOU  15:16 sent                                                                 │
+  04  Settings        │  │  +12025550002                                 │ │ YOU  16:40 sent                                                                 │
       Agent settings  │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ CONTACT  15:16 received                                                         │
-                      │  │                                               │ │ Can we arrange an Atlas walkthrough?                                            │
+  05  Sources         │  │                                               │ │ CONTACT  16:40 received                                                         │
+      Find prospects  │  │                                               │ │ Can we arrange an Atlas walkthrough?                                            │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ YOU  15:16 sent                                                                 │
+                      │  │                                               │ │ YOU  16:40 sent                                                                 │
                       │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ CONTACT  15:16 received                                                         │
+                      │  │                                               │ │ CONTACT  16:40 received                                                         │
                       │  │                                               │ │ Can we arrange an Atlas walkthrough?                                            │
                       │  │                                               │ │                                                                                 │
-                      │  │                                               │ │ YOU  15:16 sent                                                                 │
+                      │  │                                               │ │ YOU  16:40 sent                                                                 │
                       │  │                                               │ │ Fixture summary: 40 contacts and 1 booked meetings.                             │
                       │  │                                               │ │                                                                                 │
   MODEL               │  │                                               │ │                                                                                 │
@@ -180,13 +180,13 @@
                       │  ╰───────────────────────────────────────────────╯   Write     Activity     Actions
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Autonomous outreach started. Enabled relationships are assessed automatically.
-  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
+  1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
 
 === SYNTHETIC settings ===
                       │  Workspace settings                                                                                      ▶ Start agent         ?
   ◈  ORACLE           │
      L E A D S        │
-                      │  Instructions shape the conversation. Contact scope stays enforced in code.
+     v0.4.1           │  Instructions shape the conversation. Contact scope stays enforced in code.
                       │
   WORKSPACE           │  ╭ AGENT & WORKSPACE ────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
                       │  │  Model provider            codex                                                                                                  │
@@ -202,8 +202,8 @@
   04  Settings        │  │  Model override            Not configured                                                                                         │
       Agent settings  │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
-                      │  │                                                                                                                                   │
-                      │  │                                                                                                                                   │
+  05  Sources         │  │                                                                                                                                   │
+      Find prospects  │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
                       │  │                                                                                                                                   │
@@ -226,10 +226,10 @@
                       │
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
   Response timing saved.
-  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
+  1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q quit
 
 === SYNTHETIC compact ===
- 1 Dashboard         2 WhatsApp          3 Contacts          4 Settings
+ 1 Dashboard     2 WhatsApp      3 Contacts      4 Settings      5 Sources
 
   Workspace settings                             ▶ Start agent         ?
 
@@ -251,5 +251,5 @@
     Verify provider     Backup     Restore
 
 ────────────────────────────────────────────────────────────────────────────────
-  Response timing saved.
-  1–4 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q
+  Response timing saved.                                                v0.4.1
+  1–5 pages · ↑↓ select · Enter actions · Space agent · Tab focus · ? help · Q
